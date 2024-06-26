@@ -23,6 +23,6 @@
   The script first creates a list of data frames ('result_cat') for statistical analysis. This is input data for the analysis part. 
   This object contains "per hectare" data summed up to the base unit level, grouped by entities. It contains all categorical, taxonomic and boolean attributes as dimensions.
   
-  Required R packages (with dependencies): dplyr, rlang, stringr, tidyr, srvyr, survey
+  Required R packages (with dependencies): dplyr, rlang, stringr, tidyr, srvyr, survey, forestinventory
   
   Created by:   Lauri Vesa (FAO), Javier Garcia Perez (FAO), Stefano Ricci (FAO)

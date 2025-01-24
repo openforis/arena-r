@@ -830,7 +830,11 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
     # Works on two-phase still here
     if ( arena.analyze$stratification ) {
       if (arena.chainSummary$samplingStrategy !=5 & !(arena.analyze$strat_attribute %in% result_names_category_1) & !(arena.analyze$strat_attribute %in% result_names_category_2)) {
-        result_names_category_1 <- c( result_names_category_1, arena.analyze$strat_attribute )
+        if (arena.analyze$strat_attribute %in% arena.chainSummary$resultVariables$name) {
+          result_names_category_2 <- c( result_names_category_2, arena.analyze$strat_attribute )
+        } else { 
+          result_names_category_1 <- c( result_names_category_1, arena.analyze$strat_attribute )
+        }
       } 
     }
     

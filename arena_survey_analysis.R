@@ -1480,7 +1480,7 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
   
   if ( Sys.getenv("RSTUDIO_PROGRAM_MODE") == "desktop" & exists('user_file_path') ) { 
     if ( Sys.info()['sysname']=="Windows" ) {
-      processMessage = paste0(" Result files in /Documents/arena/arena-",  arena.chainSummary$surveyName, "-DATE_TIME", "/user_output/")
+      processMessage = paste0(" Result files in ", getwd(), "/user_output/")
       utils::browseURL( user_file_path )
     }
   }

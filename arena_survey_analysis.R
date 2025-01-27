@@ -835,6 +835,8 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
         } else { 
           result_names_category_1 <- c( result_names_category_1, arena.analyze$strat_attribute )
         }
+        arena.analyze$dimensions_at_baseunit  <- c(arena.analyze$dimensions_at_baseunit, TRUE) 
+        arena.analyze$dimensions_baseunit     <- c(arena.analyze$dimensions_baseunit, arena.analyze$strat_attribute)
       } 
     }
     
@@ -867,7 +869,7 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
     }
     
     if ( length( result_names_category_2 ) > 0) {
-      if (!is.na(result_names_category_2)) {
+      if (!all(is.na(result_names_category_2))) {
         dataindex <- length(result_labels) 
         
         df_cat_report <- arena.chainSummary$resultVariables                     %>%

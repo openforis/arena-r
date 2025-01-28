@@ -807,14 +807,20 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
   # ****************************************************
   
   
-  arena.analyze$dimensions_input <- arena.analyze$dimensions
+  arena.analyze$dimensions_input                <- arena.analyze$dimensions
+  arena.analyze$dimensions_at_baseunit_input    <- arena.analyze$dimensions_at_baseunit
+  
   if ( arena.analyze$reportingMethod == '1' ) arena.reportingLoops = 1
   if ( arena.analyze$reportingMethod == '2' ) arena.reportingLoops = length( arena.analyze$dimensions )
   
   
   for ( rep_loop in (1 : arena.reportingLoops )) {
     if ( arena.analyze$reportingMethod == '2' ) {
-      arena.analyze$dimensions <- arena.analyze$dimensions_input[rep_loop]
+      arena.analyze$dimensions              <- arena.analyze$dimensions_input[rep_loop]
+      arena.analyze$dimensions_at_baseunit  <- arena.analyze$dimensions_at_baseunit_input[rep_loop]
+      if (arena.analyze$dimensions_at_baseunit) arena.analyze$dimensions_baseunit <- arena.analyze$dimensions
+      if (!arena.analyze$dimensions_at_baseunit) arena.analyze$dimensions_baseunit <- NULL
+      
       out_path                 <- paste0( "dimensions/", arena.analyze$dimensions, "/")
       if ( dir.exists( paste0( user_file_path, arena.analyze$dimensions ))) unlink( paste0( user_file_path, arena.analyze$dimensions), recursive = TRUE)
       dir.create( paste0( user_file_path, "dimensions/", arena.analyze$dimensions ), showWarnings = FALSE )
@@ -872,9 +878,17 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
       if (!all(is.na(result_names_category_2))) {
         dataindex <- length(result_labels) 
         
-        df_cat_report <- arena.chainSummary$resultVariables                     %>%
-          filter( type == "C" & active == TRUE & name %in% result_names_category_2) %>%
-          select( categoryName ) 
+        # df_cat_report <- arena.chainSummary$resultVariables                         %>%
+        #   filter( type == "C" & active == TRUE & name %in% result_names_category_2) %>%
+        #   select( categoryName ) 
+        
+        df_cat_report <- arena.chainSummary$resultVariables %>%
+          slice( match( result_names_category_2, name)) %>% 
+          pull(categoryName) %>%
+          data.frame() 
+        
+        names(df_cat_report) ="categoryName"
+        
         
         for ( i in (1:nrow( df_cat_report))) {
           result_labels[[ dataindex + i]]  <- 
@@ -1200,10 +1214,16 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
     # https://cran.r-project.org/web/packages/srvyr/vignettes/srvyr-vs-survey.html
     
     # drop out stratification attributes from result tables if these are not selected as dimensions  
-    if ( arena.analyze$stratification & !( arena.analyze$strat_attribute %in% arena.analyze$dimensions_input )) {
+    if ( arena.analyze$stratification & arena.analyze$reportingMethod == '1' & !( arena.analyze$strat_attribute %in% arena.analyze$dimensions_input )) {
       arena.analyze$dimensions          <- arena.analyze$dimensions[! arena.analyze$dimensions                   %in% c( arena.analyze$strat_attribute)]
       arena.analyze$dimensions_baseunit <- arena.analyze$dimensions_baseunit[! arena.analyze$dimensions_baseunit %in% c( arena.analyze$strat_attribute)]
     }
+    
+    if ( arena.analyze$stratification & arena.analyze$reportingMethod == '2' & !( arena.analyze$strat_attribute %in% arena.analyze$dimensions_input[rep_loop] )) {
+      arena.analyze$dimensions          <- arena.analyze$dimensions[! arena.analyze$dimensions                   %in% c( arena.analyze$strat_attribute)]
+      arena.analyze$dimensions_baseunit <- arena.analyze$dimensions_baseunit[! arena.analyze$dimensions_baseunit %in% c( arena.analyze$strat_attribute)]
+    }
+    
     
     if ( arena.analyze$post_stratification & !( arena.chainSummary$postStratificationAttribute %in% arena.analyze$dimensions_input ) ) {
       arena.analyze$dimensions          <- arena.analyze$dimensions[! arena.analyze$dimensions                   %in% c( arena.chainSummary$postStratificationAttribute, 'postStratificationAttribute')]
@@ -1328,7 +1348,7 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
     
     
     out_file  <- list()
-    out_path  <- "dimensions/"
+    if ( arena.analyze$reportingMethod == '1' ) out_path  <- "dimensions/"
     
     out_file[[1]] <- paste0(user_file_path, out_path, arena.analyze$entity, " (", paste( arena.analyze$dimensions, collapse = " - "), ") --mean.csv")
     out_file[[2]] <- paste0(user_file_path, out_path, arena.analyze$entity, " (", paste( arena.analyze$dimensions, collapse = " - "), ") --total.csv")
@@ -1497,4 +1517,3 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
 ###################################################################
 # END -------------------------------------------------------------
 ###################################################################
-

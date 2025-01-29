@@ -734,7 +734,7 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
         notbase_unit_cat_attributes <- data_names[ !result_cat_attributes[[i]] %in% names(df_base_unit)]
         data_names[ data_names %in% notbase_unit_cat_attributes] <- paste0("NOTBASE_", data_names[data_names %in% notbase_unit_cat_attributes]) 
         names( out_file_data) <- data_names
-        rm( data_names); rm( notbase_unit_cat_attributes)
+        rm( notbase_unit_cat_attributes)
         
         # parse multi-selection attributes and add these into new rows
         for (k in 1: length( data_names)) {

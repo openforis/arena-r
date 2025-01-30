@@ -176,10 +176,15 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
   if (is_missing( dimension_list_arg ))   dimension_list_arg <- NULL
   if (!exists( "server_report_step" ))    server_report_step <- "last"
   if (is_missing( server_report_step ))   server_report_step <- "last"
-  
-  tryCatch( usePackage('tidyr'),
-            error = function(e){ library('tidyr')
-            })
+
+  usePackage('pacman')
+  # require v. 1.3.0 or newer
+  pacman::p_install_version(
+    'tidyr',  
+    '1.3.0'   # the minimum version to be installed
+  )
+    
+  usePackage('tidyr')
   
   conversion_HierarchicalCodeAttributes <- function( df_data ) {
     # This function is used to recode hierarchical categorical data, so that a child category item gets all parents' codes, separated with astersk (*)

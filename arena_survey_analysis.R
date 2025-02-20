@@ -753,7 +753,7 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
                 mutate( across( all_of(Col_name),  ~gsub( "\\]|\\[", "", . )))
               
               # split multi-selection data into new rows
-              out_file_data     <- tidyr::separate_longer_delim( out_file_data, Col_name, ',' )
+              out_file_data     <- tidyr::separate_longer_delim( out_file_data, all_of( Col_name), ',' )
               
               # remove double quates
               out_file_data[Col_name] <-  gsub('[\"]', '', out_file_data[[Col_name]])

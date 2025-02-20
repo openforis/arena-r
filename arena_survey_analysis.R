@@ -742,31 +742,32 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
         rm( notbase_unit_cat_attributes)
         
         # parse multi-selection attributes and add these into new rows. Add into OLAP headers' prefix 'MULTI_'
-        for (k in 1: length( data_names)) {
-          Col_name <- data_names[k]
-          if ( !all( out_file_data[ Col_name] == "")) {
-            # check if column contains both square brackets,  https://stackoverflow.com/questions/36268868/find-brackets-using-grep
-            if ( grepl( '[[].*[]]', out_file_data[ Col_name ])) { 
-              
-              # remove square brackets
-              out_file_data     <- out_file_data %>% 
-                mutate( across( all_of(Col_name),  ~gsub( "\\]|\\[", "", . )))
-              
-              # split multi-selection data into new rows
-              out_file_data     <- tidyr::separate_longer_delim( out_file_data, all_of( Col_name), ',' )
-              
-              # remove double quates
-              out_file_data[Col_name] <-  gsub('[\"]', '', out_file_data[[Col_name]])
-              
-              if (!grepl("NOTBASE_", Col_name)) {
-                new_name <- paste0( "MULTI_", Col_name)
-                out_file_data     <- out_file_data %>% rename( !!new_name := Col_name )
-                rm( new_name)
-              }          
-            }
-          }
-        }
-        rm( data_names); rm( Col_name)
+        # This part is temporary taken out from OLAP 
+        # for (k in 1: length( data_names)) {
+        #   Col_name <- data_names[k]
+        #   if ( !all( out_file_data[ Col_name] == "")) {
+        #     # check if column contains both square brackets,  https://stackoverflow.com/questions/36268868/find-brackets-using-grep
+        #     if ( grepl( '[[].*[]]', out_file_data[ Col_name ])) { 
+        #       
+        #       # remove square brackets
+        #       out_file_data     <- out_file_data %>% 
+        #         mutate( across( all_of(Col_name),  ~gsub( "\\]|\\[", "", . )))
+        #       
+        #       # split multi-selection data into new rows
+        #       out_file_data     <- tidyr::separate_longer_delim( out_file_data, all_of( Col_name), ',' )
+        #       
+        #       # remove double quates
+        #       out_file_data[Col_name] <-  gsub('[\"]', '', out_file_data[[Col_name]])
+        #       
+        #       if (!grepl("NOTBASE_", Col_name)) {
+        #         new_name <- paste0( "MULTI_", Col_name)
+        #         out_file_data     <- out_file_data %>% rename( !!new_name := Col_name )
+        #         rm( new_name)
+        #       }          
+        #     }
+        #   }
+        # }
+        # rm( data_names); rm( Col_name)
         
         out_file_name <- paste0(user_file_path, "OLAP/OLAP_", result_entities[i], ".csv")
         tryCatch({if (exists('user_file_path'))  write.csv(out_file_data, out_file_name,  row.names = F)},

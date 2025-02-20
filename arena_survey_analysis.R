@@ -741,7 +741,7 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
         names( out_file_data) <- data_names
         rm( notbase_unit_cat_attributes)
         
-        # parse multi-selection attributes and add these into new rows
+        # parse multi-selection attributes and add these into new rows. Add into OLAP headers' prefix 'MULTI_'
         for (k in 1: length( data_names)) {
           Col_name <- data_names[k]
           if ( !all( out_file_data[ Col_name] == "")) {
@@ -759,7 +759,7 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
               out_file_data[Col_name] <-  gsub('[\"]', '', out_file_data[[Col_name]])
               
               if (!grepl("NOTBASE_", Col_name)) {
-                new_name <- paste0( "NOTBASE_", Col_name)
+                new_name <- paste0( "MULTI_", Col_name)
                 out_file_data     <- out_file_data %>% rename( !!new_name := Col_name )
                 rm( new_name)
               }          

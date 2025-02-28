@@ -15,7 +15,7 @@
   
   This function can be called in Arena data processing chain, after running 'persist-results.R'.
   
-  ![Arena calculation chain as a R project looks like this](../master/docs/images/ArenaChain_March2023.png)
+  ![Arena calculation chain as a R project looks like this](../master/docs/images/Arena Data processing chain 28.2.2025.png)
   
   The OF Arena manual containing the description of the calculation chain is available at https://docs.google.com/document/d/1GWerrExvbdT5oOOlwdkE9pptK4pVbQxwtgaSNPasmKA/view
    

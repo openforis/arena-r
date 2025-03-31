@@ -406,6 +406,7 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
         dplyr::right_join( df_base_unit, by = cluster_UUID_ )                
       
       if (!arena.chainSummary$analysis$clusteringVariances) df_base_unit$weight = df_base_unit$weight / df_base_unit$sum_weight_ 
+      df_base_unit$weight[ is.na(df_base_unit$weight) ] <- 0
     } 
     
     
@@ -787,6 +788,9 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
                                   .names = "{.col}.{.fn}"),
                           item_count = n() )
       
+      base_unit.results[[i]]$weight[ is.na(base_unit.results[[i]]$weight)]   <- 0
+      base_unit.results[[i]]$item_count[ base_unit.results[[i]]$weight == 0] <- 0 
+      
       # join results with the clone of base unit
       df_base_unit <- df_base_unit %>%
         dplyr::left_join( base_unit.results[[i]], by = base_UUID_)
@@ -796,16 +800,18 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
       
       if ( cluster_UUID_ != "" ) {
         
-        df_entitydata$weight = NULL
-        cluster.results[[i]] <- df_entitydata %>%
-          # Add expansion factor for all result entities
-          dplyr::right_join(( df_base_unit %>% select( all_of( base_UUID_), weight, exp_factor_)), by = base_UUID_) %>%
-          dplyr::group_by( across( all_of( cluster_UUID_ )))                                                        %>%
-          dplyr::summarize( across(.cols= all_of( resultVariables ),
-                                   list( Total = ~sum( exp_factor_ * .x, na.rm = TRUE), Mean = ~mean( .x, na.rm = TRUE)),
-                                   .names = "{.col}.{.fn}"),
-                            sum_weight = sum( weight) )
+        cluster.results[[i]] <- df_base_unit %>% 
+          dplyr::group_by( across( all_of( cluster_UUID_ )))  %>%
+          dplyr::summarize( across(ends_with( "Total" ), ~sum( .x)), 
+                            sum_weight = sum(weight), exp_factor_ = sum(exp_factor_)) %>%
+          dplyr::mutate( across(ends_with( "Total" ),
+                                ~ .x/exp_factor_))
       }      
+      
+      n_names = names(cluster.results[[i]])
+      n_names = str_replace(n_names, ".Total", ".Mean")
+      names(cluster.results[[i]]) = n_names
+      rm(n_names)
       
       rm(resultVariables)
     }
@@ -1463,7 +1469,7 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
   
   if ( arena.chainSummary$analysis$nonResponseBiasCorrection) {
     if ( arena.analyze$stratification | arena.analyze$post_stratification ) {
-      nonResponse_out1 <- df_base_unit %>% select( STRATUM = all_of( arena.analyze$strat_attribute), correction_factor = arena_ssu_correction ) %>% unique() %>% arrange( STRATUM)  
+      nonResponse_out1 <- df_base_unit %>% select( STRATUM = all_of( arena.analyze$strat_attribute), correction_factor = arena_psu_correction ) %>% unique() %>% arrange( STRATUM)  
       tryCatch({if (exists('user_file_path') & exists("nonResponse_out1")) write.csv( nonResponse_out1, out_file[[5]], row.names = F)},
                warning = function( w ) { cat("No output - nonResponse_out1") },
                error   = function( e ) { cat("No output - nonResponse_out1")

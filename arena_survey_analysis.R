@@ -793,6 +793,7 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
         dplyr::left_join( base_unit.results[[i]], by = base_UUID_)
       
       
+      
       ## PART 3. compute sum of per hectare results at the cluster level for each result variable
       
       if ( cluster_UUID_ != "" ) {

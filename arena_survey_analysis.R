@@ -792,7 +792,6 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
       df_base_unit <- df_base_unit %>%
         dplyr::left_join( base_unit.results[[i]], by = base_UUID_)
       
-      df_base_unit$item_count[ df_base_unit$sum_weight_ == 0] <- 0
       
       ## PART 3. compute sum of per hectare results at the cluster level for each result variable
       
@@ -804,13 +803,13 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
                             sum_weight = sum(weight), exp_factor_ = sum(exp_factor_)) %>%
           dplyr::mutate( across(ends_with( "Total" ),
                                 ~ .x/exp_factor_))
-      }      
       
-      n_names = names(cluster.results[[i]])
-      n_names = str_replace(n_names, ".Total", ".Mean")
-      names(cluster.results[[i]]) = n_names
-      rm(n_names)
-      
+        n_names = names(cluster.results[[i]])
+        n_names = str_replace(n_names, ".Total", ".Mean")
+        names(cluster.results[[i]]) = n_names
+        rm(n_names)
+      }
+        
       rm(resultVariables)
     }
     
@@ -1044,38 +1043,61 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
       ids_2_survey          <- NULL
       dimension_names       <- dimension_names[ !stringr::str_detect( dimension_names, pattern = base_UUID_) ] # remove a list element
       cat_names_uuid        <- cat_names_uuid[  !stringr::str_detect( cat_names_uuid,  pattern = base_UUID_) ]
+
+      df_analysis_combined2 <- df_analysis_combined %>%
+        unite(., CLUSTERCOL,  c( all_of( cluster_UUID_), all_of( arena.analyze$dimensions)), sep = "--", remove = FALSE) %>%
+        distinct(CLUSTERCOL, .keep_all = TRUE) %>%
+        dplyr::select(CLUSTERCOL, weight, all_of(cluster_UUID_), all_of( arena.analyze$dimensions))
+      
+      resultVariables <- arena.chainSummary$resultVariables %>%
+        dplyr::filter( areaBased == TRUE & active == TRUE & entity == arena.analyze$entity ) %>%
+        dplyr::mutate( name = paste0( name, "_ha.Total")) %>%
+        pull( name) 
       
       if ( all( arena.analyze$dimensions_at_baseunit)) {   # all dimensions are at the base unit or above
+
         
-        df_analysis_combined  <- df_analysis_combined                               %>%
-          dplyr::select( -all_of( base_UUID_))                                      %>% 
-          dplyr::group_by( across( all_of( cluster_UUID_ )))                        %>%
-          dplyr::mutate( across( ends_with('.Total'), ~sum(  ., na.rm = TRUE )))    %>%
-          dplyr::mutate( across( ends_with('.Mean'),  ~mean( ., na.rm = TRUE )))    %>%
-          dplyr::mutate( weight = sum( weight), exp_factor_ = sum( exp_factor_), entity_count_ = sum( entity_count_)) %>% 
-          distinct( !!! syms( cluster_UUID_), .keep_all = TRUE)                     %>%
+        df_analysis_combined  <- df_base_unit                        %>%
+          unite(., CLUSTERCOL,  c( all_of( cluster_UUID_), all_of( arena.analyze$dimensions)), sep = "--", remove = FALSE) %>%
+          dplyr::select(CLUSTERCOL, exp_factor_, weight, all_of(resultVariables)) %>%           
+          dplyr::group_by( CLUSTERCOL )                              %>%
+          dplyr::summarize( across(ends_with( "Total" ), ~sum( .x)), exp_factor_ = sum(exp_factor_)) %>%
+          dplyr::mutate( across(ends_with( ".Total" ),
+                                list(Mean= ~ .x/exp_factor_)))       %>%
+          setNames( stringr::str_replace( names(.), ".Total_", ".")) %>%
+          dplyr::left_join( df_analysis_combined2, by = "CLUSTERCOL")  %>%
+          data.frame()
+        
+        df_analysis_weights <- df_base_unit              %>%
+          unite(., CLUSTERCOL,  c( all_of( cluster_UUID_), all_of( arena.analyze$dimensions)), sep = "--", remove = FALSE) %>%
+          dplyr::select(CLUSTERCOL, exp_factor_, weight) %>%           
+          dplyr::summarize( across(ends_with( "Total" ), ~sum( .x)), exp_factor_ = sum(exp_factor_), weight=mean(weight), .by = "CLUSTERCOL") %>%
           data.frame()
         
       } else {
         
-        df_analysis_combined  <- df_analysis_combined                                                %>%
-          dplyr::select( -all_of( base_UUID_), -weight, -exp_factor_, -entity_count_ )               %>% 
-          dplyr::group_by( across( c( all_of( cluster_UUID_ ), all_of(arena.analyze$dimensions))))   %>%
-          dplyr::mutate( across( ends_with('.Total'), ~sum(  ., na.rm = TRUE )))                     %>%
-          dplyr::mutate( across( ends_with('.Mean'),  ~mean( ., na.rm = TRUE )))                     %>%
-          distinct( !!! syms( cluster_UUID_), !!! syms( arena.analyze$dimensions), .keep_all = TRUE) %>%
-          left_join( df_analysis_combined                                                            %>% 
-                       select(all_of( base_UUID_), all_of(cluster_UUID_), weight,exp_factor_, entity_count_) %>%
-                       distinct( !!! syms( base_UUID_), .keep_all = TRUE)                            %>% 
-                       summarize( weight = sum( weight), exp_factor_ = sum(exp_factor_ ), entity_count_ = sum( entity_count_), .by =  all_of( cluster_UUID_ )),
-                     by = cluster_UUID_)                                                             %>%
+        df_analysis_combined  <- df_analysis_combined                %>%
+          unite(., CLUSTERCOL,  c( all_of( cluster_UUID_), all_of( arena.analyze$dimensions)), sep = "--", remove = FALSE) %>%
+          dplyr::select(CLUSTERCOL, exp_factor_, weight, all_of(resultVariables))         %>%           
+          dplyr::group_by( CLUSTERCOL )                                                   %>%
+          dplyr::summarize( across(ends_with( "Total" ), ~sum( .x)), exp_factor_ = sum(exp_factor_)) %>%
+          dplyr::mutate( across(ends_with( ".Total" ),
+                                list( Mean= ~ .x/exp_factor_)))      %>%
+          setNames( stringr::str_replace( names(.), ".Total_", ".")) %>%
+          dplyr::left_join( df_analysis_combined2, by = "CLUSTERCOL") %>%
           data.frame()
+        
+        df_analysis_weights <- df_analysis_combined      %>%
+          dplyr::select(CLUSTERCOL, exp_factor_, weight) %>%           
+          dplyr::summarize( across(ends_with( "Total" ), ~sum( .x)), exp_factor_ = sum(exp_factor_), weight=mean(weight), .by = "CLUSTERCOL") %>%
+          data.frame()
+
       }
       
+      df_analysis_combined$CLUSTERCOL <- NULL
+      df_analysis_combined[ is.na(df_analysis_combined) ] <- 0
+      rm( df_analysis_combined2)
       
-      df_analysis_weights <- df_analysis_combined %>%
-        select( all_of( cluster_UUID_), weight, exp_factor_ ) %>%
-        distinct( !!! syms( cluster_UUID_), .keep_all = TRUE)  
       
     } else if ( cluster_UUID_ != "" & arena.chainSummary$analysis$clusteringVariances ) {
       ids_2_survey        <- cluster_UUID_
@@ -1114,10 +1136,15 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
     
     if ( cluster_UUID_ != "" & !arena.chainSummary$analysis$clusteringVariances ) {
       df_analysis_area <- df_analysis_area                             %>%
-        dplyr::left_join( df_analysis_weights, by = cluster_UUID_)
+        unite(., CLUSTERCOL,  c( all_of( cluster_UUID_), all_of( arena.analyze$dimensions)), sep = "--", remove = FALSE) %>%
+        dplyr::left_join( df_analysis_weights, by = "CLUSTERCOL")      %>%
+        dplyr::select(-CLUSTERCOL)
       
       df_analysis_combined <- df_analysis_combined                     %>%  
-        dplyr::left_join( df_analysis_weights, by = cluster_UUID_)
+        unite(., CLUSTERCOL,  c( all_of( cluster_UUID_), all_of( arena.analyze$dimensions)), sep = "--", remove = FALSE) %>%
+        dplyr::left_join( df_analysis_weights, by = "CLUSTERCOL") %>%
+        dplyr::select(-CLUSTERCOL)
+      
     } else {
       df_analysis_area <- df_analysis_area                             %>%
         dplyr::left_join( df_analysis_weights, by = base_UUID_)
@@ -1126,6 +1153,8 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
         dplyr::left_join( df_analysis_weights, by = base_UUID_)
     }
     
+    df_analysis_combined$weight[ is.na(df_analysis_combined$weight)]    <- 0
+    df_analysis_combined$exp_factor_[ df_analysis_combined$weight == 0] <- 0
     if ( all( df_analysis_combined$exp_factor_ == 0)) df_analysis_combined$exp_factor_ = df_analysis_combined$weight
     
     # missing stratum code set to "", in order to report these too
@@ -1288,6 +1317,7 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
     out_mean_chr   <- out_mean %>% select( where( is.character))
     out_mean_num   <- out_mean %>% select( where( is.numeric), ends_with("_tally"))
     out_total      <- out_area$area * out_mean_num
+    out_total[ is.na(out_total)] <- 0
     
     out_total      <- cbind( out_mean_chr, out_total ) 
     if (!("area" %in% names( out_total))) out_total$area <- out_area$area  
@@ -1512,7 +1542,7 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
     
     if ( cluster_UUID_ !="" ) {
       outfile8            <- paste0( out_path, result_entities[[i]], "_cluster_results.csv")
-      cluster.results_out <- cluster.results[i] %>% as.data.frame() %>% select(-ends_with(".Total"))
+      cluster.results_out <- cluster.results[[i]] %>% as.data.frame() %>% select(-ends_with(".Total"))
       cluster.results_out <- df_base_unit %>% dplyr::select( all_of( cluster_UUID_), all_of( arena.chainSummary$clusteringEntityKeys )) %>%
         unique() %>%
         dplyr::left_join( cluster.results_out, by = cluster_UUID_) %>%

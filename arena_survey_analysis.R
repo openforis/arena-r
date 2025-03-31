@@ -762,7 +762,7 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
               #       
               if (!grepl("NOTBASE_", Col_name)) {
                 new_name <- paste0( "MULTI_", Col_name)
-                out_file_data     <- out_file_data %>% rename( !!new_name := Col_name )
+                out_file_data     <- out_file_data %>% rename( !!new_name := all_of(Col_name))
                 rm( new_name)
               }          
             }

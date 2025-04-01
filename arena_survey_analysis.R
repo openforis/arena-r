@@ -1533,7 +1533,8 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
     
     base_unit.results_out <- df_base_unit %>% select( all_of( base_UUID_), all_of( dimension_names ), weight, exp_factor=exp_factor_) %>%
       dplyr::left_join( base_unit.results_out, by = base_UUID_) %>%
-      dplyr::select( -all_of( base_UUID_))
+      dplyr::select( -all_of( base_UUID_)) %>%
+      mutate(item_count = ifelse(weight == 0, 0, item_count))
     
     tryCatch({if (exists('user_file_path')) write.csv( base_unit.results_out, outfile7, row.names = F)},
              warning = function( w ) { cat("No output - base unit results") },

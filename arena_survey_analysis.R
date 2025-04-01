@@ -786,7 +786,9 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
         dplyr::summarize( across( .cols= all_of( resultVariables),
                                   list( Total = ~sum( exp_factor_ * .x, na.rm = TRUE), Mean = ~sum( .x, na.rm = TRUE) ),
                                   .names = "{.col}.{.fn}"),
-                          item_count = n() )
+                          item_count = n() ) %>%
+        dplyr::mutate(item_count = ifelse(if_all(paste0( resultVariables, ".Total") , ~ .x == 0), 0, item_count))
+      
       
       # join results with the clone of base unit
       df_base_unit <- df_base_unit %>%

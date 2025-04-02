@@ -78,7 +78,8 @@ arenaReadJSON <- function( dimension_list_arg ) {
   
   if ( is.null( arena.chainSummary$analysis ))    return( "Arena Analytics: No entity to report" )
   if ( is.null( arena.chainSummary$analysis$entity) | is.null( arena.chainSummary$analysis$dimensions )) return( "Arena Analytics: No entity or dimensions to report" )
-  if ( arena.chainSummary$analysis$entity == "" ) return( "Arena Analytics: No entity to report" )
+  if ( arena.chainSummary$analysis$entity == "" ) return( "Arena Analytics: No entity to report selected" )
+  if (is.null(arena.chainSummary$samplingStrategy)) return( "Arena Analytics: No sampling strategy selected" )
   
   arena.analyze$entity       <- trimws( arena.chainSummary$analysis$entity )
   if (!is.null(dimension_list_arg)) {

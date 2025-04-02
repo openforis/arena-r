@@ -1197,24 +1197,7 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
           nest      = FALSE, # If TRUE, relabel cluster ids to enforce nesting within strata
           variables = c( arena.analyze$dimensions, ends_with('.Mean')) )
       
-      design_srvyr_global_mean <- NULL
-      if (( length( arena.analyze$dimensions_baseunit) > 0 &  arena.analyze$reportingMethod == '2' ) | ( all( arena.analyze$dimensions_at_baseunit) &  arena.analyze$reportingMethod == '1'))  {
-        if (arena.analyze$reportingMethod == '2') {
-          analyze_variables <- arena.analyze$dimensions
-        } else {
-          analyze_variables <- arena.analyze$dimensions_baseunit
-        }
-        
-        design_srvyr_global_mean <-  df_analysis_combined   %>% 
-          srvyr::as_survey_design(
-            ids       = !!ids_2_survey,
-            strata    = !!stratum_2_survey,
-            fpc       = NULL, 
-            weights   = !!arena.weights,  
-            nest      = FALSE, # If TRUE, relabel cluster ids to enforce nesting within strata
-            variables = c( all_of( analyze_variables), ends_with('.Mean')) )
-      }
-      
+ 
       design_srvyr_total <-  df_analysis_combined     %>%
         srvyr::as_survey_design(
           ids       = !!ids_2_survey,
@@ -1250,13 +1233,6 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
                                                   strata = ~postStratificationAttribute,
                                                   population = ps.weights,
                                                   partial = TRUE) #if TRUE, ignore population strata not present in the sample
-      
-      if (!is.null(design_srvyr_global_mean))  {
-        design_srvyr_global_mean <- survey::postStratify( design_srvyr_global_mean, 
-                                                          strata = ~postStratificationAttribute,
-                                                          population = ps.weights,
-                                                          partial = TRUE) #if TRUE, ignore population strata not present in the sample
-      }
       
       design_srvyr_total <- survey::postStratify( design_srvyr_total, 
                                                   strata = ~postStratificationAttribute,
@@ -1339,13 +1315,15 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
       as.data.frame(.)  %>%
       setNames( stringr::str_replace( names(.), ".Total_1", ".Total"))
     
-    if (!is.null(design_srvyr_global_mean))  {
-      out_global_mean <- design_srvyr_global_mean  %>%
-        dplyr::summarize( across( c( ends_with(".Mean") ),   
-                                  list( ~survey_mean( ., na.rm = FALSE, vartype = c("se", "var", "ci"), proportion = FALSE, level=arena.chainSummary$analysis$pValue )))) %>% 
-        as.data.frame(.)  %>%
-        setNames( stringr::str_replace( names(.), ".Mean_1", ".Mean"))
-    }
+    TotalArea <- sum( df_base_unit$exp_factor_)
+    
+    out_global_mean <- out_global_total %>%
+      select(- all_of(ends_with(".Total_var")), -whole_area_, - all_of(starts_with("exp_factor_"))) %>%
+      mutate( across( ends_with(".Total"),     ~ .x/ TotalArea, .names="{.col}" )) %>%
+      mutate( across( ends_with(".Total_se"),  ~ .x/ TotalArea, .names="{.col}" )) %>%
+      mutate( across( ends_with(".Total_low"), ~ .x/ TotalArea, .names="{.col}" )) %>%
+      mutate( across( ends_with(".Total_upp"), ~ .x/ TotalArea, .names="{.col}" )) %>%
+      setNames( stringr::str_replace( names(.), ".Total", ".Mean")) 
     
     out_global_total$tally <- nrow( df_base_unit %>% filter( weight>0 ) %>% select( all_of( base_UUID_)) %>% unique() )
     # drop out area estimates from this table
@@ -1468,7 +1446,7 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
   out_global_total <- setNames( out_global_total, stringr::str_replace( names(out_global_total), "_ha.Total_globalAverage",".average"))
   out_global_total <- setNames( out_global_total, stringr::str_replace( names(out_global_total), "_ha.Total", ".total"))
   out_global_total$whole_area_ <- NULL
-  
+  out_global_total$total_area  <- TotalArea
   
   # drop out statistical variables from result tables
   if (arena.analyze$showStatisticsInResults == FALSE & exists("out_global_mean"))  out_global_mean  <- out_global_mean  %>% select( -ends_with( c( ".sd", ".var",".area_sd",".ci_lower",".ci_upper")))

@@ -1318,12 +1318,23 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
     TotalArea <- sum( df_base_unit$exp_factor_)
     
     out_global_mean <- out_global_total %>%
-      select(- all_of(ends_with(".Total_var")), -whole_area_, - all_of(starts_with("exp_factor_"))) %>%
+      select( -whole_area_, - all_of(starts_with("exp_factor_"))) %>%
       mutate( across( ends_with(".Total"),     ~ .x/ TotalArea, .names="{.col}" )) %>%
       mutate( across( ends_with(".Total_se"),  ~ .x/ TotalArea, .names="{.col}" )) %>%
       mutate( across( ends_with(".Total_low"), ~ .x/ TotalArea, .names="{.col}" )) %>%
       mutate( across( ends_with(".Total_upp"), ~ .x/ TotalArea, .names="{.col}" )) %>%
       setNames( stringr::str_replace( names(.), ".Total", ".Mean")) 
+    
+    # compute variance
+    names_sd  = out_global_mean %>% select( all_of( ends_with(".Mean_se")))  %>% names()
+    names_var = out_global_mean %>% select( all_of( ends_with(".Mean_var"))) %>% names()
+    
+    for (iR in (1:length(names_sd))) {
+      out_global_mean[ names_sd[iR]][ is.na( out_global_mean[names_sd[iR]])] <- 0
+      out_global_mean[ names_var[iR]] <- out_global_mean[names_sd[iR]]^2
+    }
+    rm(names_sd); rm(names_var); rm(iR)
+    
     
     out_global_total$tally <- nrow( df_base_unit %>% filter( weight>0 ) %>% select( all_of( base_UUID_)) %>% unique() )
     # drop out area estimates from this table

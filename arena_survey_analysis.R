@@ -803,12 +803,12 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
         cluster.results[[i]] <- df_base_unit %>% 
           dplyr::group_by( across( all_of( cluster_UUID_ )))  %>%
           dplyr::summarize( across(ends_with( "Total" ), ~sum( .x)), 
-                            sum_weight = sum(weight), exp_factor_ = sum(exp_factor_)) %>%
+                            weight = sum(weight), exp_factor = sum(exp_factor_)) %>%
           dplyr::mutate( across(ends_with( "Total" ),
-                                ~ .x/exp_factor_))
+                                ~ .x/exp_factor))
       
         n_names = names(cluster.results[[i]])
-        n_names = str_replace(n_names, ".Total", ".Mean")
+        n_names = str_replace(n_names, ".Total", "")
         names(cluster.results[[i]]) = n_names
         rm(n_names)
       }

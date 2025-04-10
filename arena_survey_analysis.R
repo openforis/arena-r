@@ -69,17 +69,17 @@
 
 arenaReadJSON <- function( dimension_list_arg ) {
   
-  # read JSON file 
+  # read JSON file 'chain_summary.json'
   chain_summary_json <-  paste(getwd(), 'chain_summary.json', sep = .Platform$file.sep)
   if ( file.exists( chain_summary_json ))  arena.chainSummary <- jsonlite::fromJSON( chain_summary_json )
   
   # check analysis parameters, if any
   arena.analyze   <- list(entity = '', dimensions = '', filter = "", reportingMethod = '2')
   
-  if ( is.null( arena.chainSummary$analysis ))    return( "Arena Analytics: No entity to report" )
+  if ( is.null( arena.chainSummary$analysis ))       return( "Arena Analytics: No entity to report" )
   if ( is.null( arena.chainSummary$analysis$entity) | is.null( arena.chainSummary$analysis$dimensions )) return( "Arena Analytics: No entity or dimensions to report" )
-  if ( arena.chainSummary$analysis$entity == "" ) return( "Arena Analytics: No entity to report selected" )
-  if (is.null(arena.chainSummary$samplingStrategy)) return( "Arena Analytics: No sampling strategy selected" )
+  if ( arena.chainSummary$analysis$entity == "" )    return( "Arena Analytics: No entity to report" )
+  if ( is.null(arena.chainSummary$samplingStrategy)) return( "Arena Analytics: No sampling strategy selected" )
   
   arena.analyze$entity       <- trimws( arena.chainSummary$analysis$entity )
   if (!is.null(dimension_list_arg)) {
@@ -88,54 +88,68 @@ arenaReadJSON <- function( dimension_list_arg ) {
     arena.analyze$dimensions   <- trimws( arena.chainSummary$analysis$dimensions )
   }
   
-  # drop out totally blank (NA) columns
+  # drop out blank (NA) dimensions, i.e. dimensions where is no data 
   drop_names <- get( arena.analyze$entity) %>% select( where( ~all( is.na(.)))) %>% names()
-  # assign( arena.analyze$entity,        get( arena.analyze$entity ) %>% select( -any_of( drop_names)))
-  # assign( arena.chainSummary$baseUnit, get( arena.chainSummary$baseUnit ) %>% select( -any_of( drop_names)))
   if ( length( drop_names) > 0) {
     arena.chainSummary$analysis$dimensions <- arena.chainSummary$analysis$dimensions[!arena.chainSummary$analysis$dimensions %in% drop_names ]
     arena.analyze$dimensions               <- arena.analyze$dimensions[ !arena.analyze$dimensions %in% drop_names ]
   }   
   
-  arena.analyze$showStatisticsInResults <- TRUE # standard deviation, variance, and conf. intervals are shown in the result tables
+  # Are standard deviation, variance, and conf. intervals are shown in the result tables?
+  arena.analyze$showStatisticsInResults <- TRUE 
   
-  if ( !is.null( arena.chainSummary$analysis$filter))          arena.analyze$filter            <- trimws( arena.chainSummary$analysis$filter )  
+  # apply user-defined filtering rule in UI for this data
+  if ( !is.null( arena.chainSummary$analysis$filter)) arena.analyze$filter <- trimws( arena.chainSummary$analysis$filter )  
   if ( toupper( arena.analyze$filter) == "NOSTATISTICS" | toupper( arena.analyze$filter) == "NO STATISTICS" ) {
     arena.analyze$showStatisticsInResults = FALSE
     arena.analyze$filter = ""
   }
+  
   if ( !is.null( arena.chainSummary$analysis$reportingMethod)) arena.analyze$reportingMethod   <- trimws( arena.chainSummary$analysis$reportingMethod )  
   
+  # check again after filtering if any entity to report
   if ( is.null( arena.analyze$entity) | arena.analyze$entity =="" | is.na( arena.analyze$entity ) | length( arena.analyze$entity ) == 0 ) {
-    return( "Arena Analytics: No entity to report" )
+      return( "Arena Analytics: No entity to report" )
+   # two-phase sampling
   } else if ( arena.chainSummary$samplingStrategy == 5 ) {
     # 2-phase sampling uses for reporting Stratum + Common attribute
-    arena.analyze$dimensions <- paste( arena.chainSummary$stratumAttribute, arena.chainSummary$commonAttribute, sep = "__")
+      arena.analyze$dimensions <- paste( arena.chainSummary$stratumAttribute, arena.chainSummary$commonAttribute, sep = "__")
+  # check again after filtering if any dimension data to report
   } else if ( is.null( arena.analyze$dimensions ) | ( length( arena.analyze$dimensions ) == 0) | is.na( arena.analyze$entity ) | length( arena.analyze$entity ) == 0 ) {
-    return( "Arena Analytics: No dimension to report" )
+      return( "Arena Analytics: No dimension to report" )
   } else {
-    arena.analyze$dimensions_datatypes   <- c()
-    arena.analyze$dimensions_at_baseunit <- c()
+  # 
+    arena.analyze$dimensions_datatypes   <- c()  # character list of dimensions' data types
+    arena.analyze$dimensions_at_baseunit <- c()  # logical list showing whether dimensions are at the base unit (TRUE) or not (FALSE)
     
-    # drop out totally blank (NA) columns
+    # drop out totally blank (all NAs) columns
     drop_names <- get( arena.analyze$entity) %>% select( where( ~all( is.na(.)))) %>% names()
     assign( arena.analyze$entity,        get( arena.analyze$entity ) %>% select( -any_of( drop_names)))
     assign( arena.chainSummary$baseUnit, get( arena.chainSummary$baseUnit ) %>% select( -any_of( drop_names)))
-    arena.analyze$dimensions <- arena.analyze$dimensions[!arena.analyze$dimensions %in% drop_names]
+    arena.analyze$dimensions <- arena.analyze$dimensions[ !arena.analyze$dimensions %in% drop_names]
     
+    # get data types
     entity_datatype <- lapply(get( arena.analyze$entity), class)
     
+    # get dimensions data types ('character', 'taxon')
     for ( j in (1 : length( arena.analyze$dimensions ))){
       arena.analyze$dimensions_datatypes[[j]]   <- ifelse( arena.analyze$dimensions[[j]] %in% names( get( arena.analyze$entity)),
                                                            as.character( entity_datatype[arena.analyze$dimensions[[j]]]), "character")
       arena.analyze$dimensions_datatypes[[j]]   <- ifelse(  paste0( arena.analyze$dimensions[[j]], "_scientific_name") %in% names( get( arena.analyze$entity)), "taxon", arena.analyze$dimensions_datatypes[[j]] )
+      # get a list whether dimension is at base unit (TRUE) or not (FALSE)
       arena.analyze$dimensions_at_baseunit[[j]] <- unlist( ifelse( arena.analyze$dimensions[[j]] %in% names( get( arena.chainSummary$baseUnit)), TRUE, FALSE))
     }
+    # set all dimension as character
     arena.analyze$dimensions_datatypes   <- as.character( arena.analyze$dimensions_datatypes)
+    # just verify that this list is logical
     arena.analyze$dimensions_at_baseunit <- as.logical( arena.analyze$dimensions_at_baseunit) 
+    # get a list of names with dimension  at base unit level
     arena.analyze$dimensions_baseunit    <- as.character( unlist( Map(`[`, arena.analyze$dimensions, arena.analyze$dimensions_at_baseunit)))
-    # change comma to dot (if used as decimal separator)
+
+    # if no reporting area, set 100 ha as default
     if (is.null( arena.chainSummary$analysis$reportingArea)) arena.chainSummary$analysis$reportingArea <- 100
+
+    # change comma to dot (if it is used as decimal separator in UI)
     arena.chainSummary$analysis$reportingArea <- stringr::str_replace( arena.chainSummary$analysis$reportingArea, ",", ".")
     arena.analyze$reportingArea               <- as.numeric( paste0( "0", trimws( arena.chainSummary$analysis$reportingArea ))) 
     rm(entity_datatype)
@@ -156,8 +170,56 @@ arenaReadJSON <- function( dimension_list_arg ) {
   return( list(arena.analyze, arena.chainSummary) )
 } # arenaReadJSON
 
+#########################################################################
+
+conversion_HierarchicalCodeAttributes <- function( df_data, arena.chainSummary ) {
+  # This function is used for re-coding hierarchical categorical data, so that a child category item gets all its parents' codes, separated with asterisk (*)
+  # for example: '1' Province_A: 'A' District_A, 'B' District_B  ==> Districts can be re-coded as: '1*A' District_A, '1*B' District_B   
+  # New codes are valid only during the run time, and they are not returned back into the Arena database
+  
+  if ( is.null( df_data ))  return( df_data )
+  if ( nrow( df_data ) == 0 | is.null( arena.chainSummary$categoryAttributeAncestors )) return( df_data )
+  if ( length( arena.chainSummary$categoryAttributeAncestors$attribute ) == 0)          return( df_data )
+  categoryNames = unique(arena.chainSummary$categoryAttributeAncestors$categoryName)
+  
+  for (j in 1: length(categoryNames)) {
+    cat_table <- arena.chainSummary$categoryAttributeAncestors %>% filter(categoryName==categoryNames[j]) %>%
+      arrange( categoryLevel)
+    for ( i in 1 : length( cat_table$attribute )) {
+      if ( cat_table$attribute[[i]] %in% names( df_data )) {
+        varname <- cat_table$attribute[[i]]
+        df_data <- df_data %>%
+          unite( !!varname, any_of( c( cat_table$ancestors[[i]][i], varname )), sep = "*", remove=FALSE ) 
+      }
+    }}
+  return( df_data )
+} 
+
 
 #########################################################################
+
+joinLabels <- function( result_labels, out_table) { 
+  # function to join dimensions' label texts with output tables which contain coded data
+  
+  for ( i in (1:length( result_labels))) {
+    if ( names(result_labels[i]) %in% names( out_table)) {
+      out_table$code <- out_table[[ names( result_labels[i])]]
+      out_table <- out_table                               %>% 
+        dplyr::full_join( result_labels[[i]], by = "code") %>%
+        dplyr::select( -code)
+      
+      out_table[[ names(result_labels[i])]] <- out_table$label
+      out_table$label                      <- NULL
+      out_table$code                       <- NULL
+    }
+  }
+  return( out_table)
+}
+
+
+#########################################################################
+
+# MAIN PROGRAM
 
 arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
   
@@ -187,45 +249,6 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
     
   usePackage('tidyr')
   
-  conversion_HierarchicalCodeAttributes <- function( df_data ) {
-    # This function is used to recode hierarchical categorical data, so that a child category item gets all parents' codes, separated with astersk (*)
-    # for example: '1' Province_A: '1' District_A, '2' District_B  ==> Districts can be recoded as: '1*1' District_A, '1*2' District_B   
-    # New codes are valid only during the run time, and they are not returned back into the Arena database
-    if ( is.null( df_data ))  return( df_data )
-    if ( nrow( df_data ) == 0 | is.null( arena.chainSummary$categoryAttributeAncestors )) return( df_data )
-    if ( length( arena.chainSummary$categoryAttributeAncestors$attribute ) == 0)          return( df_data )
-    categoryNames = unique(arena.chainSummary$categoryAttributeAncestors$categoryName)
-    
-    for (j in 1: length(categoryNames)) {
-      cat_table <- arena.chainSummary$categoryAttributeAncestors %>% filter(categoryName==categoryNames[j]) %>%
-        arrange(categoryLevel)
-      for ( i in 1 : length( cat_table$attribute )) {
-        if ( cat_table$attribute[[i]] %in% names( df_data )) {
-          varname <- cat_table$attribute[[i]]
-          df_data <- df_data %>%
-            unite( !!varname, any_of( c( cat_table$ancestors[[i]][i], varname )), sep = "*", remove=FALSE ) 
-        }
-      }}
-    return( df_data )
-  } # conversion_HierarchicalCodeAttributes
-  
-  
-  # function to join "result_labels" with output tables
-  joinLabels <- function(result_labels, out_table) { 
-    for ( i in (1:length(result_labels))) {
-      if ( names(result_labels[i]) %in% names( out_table)) {
-        out_table$code <- out_table[[ names( result_labels[i])]]
-        out_table <- out_table                               %>% 
-          dplyr::full_join( result_labels[[i]], by = "code") %>%
-          dplyr::select(-code)
-        
-        out_table[[names(result_labels[i])]] <- out_table$label
-        out_table$label                      <- NULL
-        out_table$code                       <- NULL
-      }
-    }
-    return(out_table)
-  }
   
   # Read json data
   arena_return        <- arenaReadJSON( dimension_list_arg )
@@ -272,7 +295,7 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
     # get base unit data into a data frame
     df_base_unit                   <- get( arena.chainSummary$baseUnit )
     df_base_unit$weight[ is.na( df_base_unit$weight)] <- 0
-    df_base_unit                   <- conversion_HierarchicalCodeAttributes( df_base_unit)
+    df_base_unit                   <- conversion_HierarchicalCodeAttributes( df_base_unit, arena.chainSummary)
     
     # take a copy of weight. Non-response bias correction may change weights. 
     df_base_unit$weight_original_  <- df_base_unit$weight 
@@ -602,7 +625,7 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
       # drop out columns where all data is NA.  https://stackoverflow.com/questions/2643939/remove-columns-from-dataframe-where-all-values-are-na
       
       df_entitydata              <- get(result_entities[[i]])
-      df_entitydata              <- conversion_HierarchicalCodeAttributes( df_entitydata )
+      df_entitydata              <- conversion_HierarchicalCodeAttributes( df_entitydata, arena.chainSummary )
       
       
       result_cat_attributes[[i]] <- ( df_entitydata  %>% select( where( ~!all( is.na(.)))) %>% select( where( ~is.character(.))) )  %>%
@@ -887,7 +910,7 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
     
     if (length( result_names_category_1 ) > 0) {
       df_cat_report <- get( arena.analyze$entity) 
-      df_cat_report <- conversion_HierarchicalCodeAttributes( df_cat_report )
+      df_cat_report <- conversion_HierarchicalCodeAttributes( df_cat_report, arena.chainSummary )
       
       df_cat_report <- df_cat_report %>%  
         select( all_of(result_names_category_1), any_of( paste0( result_names_category_1,"_label")), any_of( paste0( result_names_category_1,"_scientific_name"))) %>%
@@ -1073,27 +1096,35 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
         
         df_analysis_weights <- df_base_unit              %>%
           unite(., CLUSTERCOL,  c( all_of( cluster_UUID_), all_of( arena.analyze$dimensions)), sep = "--", remove = FALSE) %>%
-          dplyr::select(CLUSTERCOL, exp_factor_, weight) %>%           
+          dplyr::select(CLUSTERCOL, exp_factor_, weight, all_of(ends_with( "Total" ))) %>%           
           dplyr::summarize( across(ends_with( "Total" ), ~sum( .x)), exp_factor_ = sum(exp_factor_), weight=mean(weight), .by = "CLUSTERCOL") %>%
           data.frame()
         
       } else {
         
-        df_analysis_combined  <- df_analysis_combined                %>%
-          unite(., CLUSTERCOL,  c( all_of( cluster_UUID_), all_of( arena.analyze$dimensions)), sep = "--", remove = FALSE) %>%
-          dplyr::select(CLUSTERCOL, exp_factor_, weight, all_of(resultVariables))         %>%           
-          dplyr::group_by( CLUSTERCOL )                                                   %>%
-          dplyr::summarize( across(ends_with( "Total" ), ~sum( .x)), exp_factor_ = sum(exp_factor_)) %>%
-          dplyr::mutate( across(ends_with( ".Total" ),
-                                list( Mean= ~ .x/exp_factor_)))      %>%
-          setNames( stringr::str_replace( names(.), ".Total_", ".")) %>%
-          dplyr::left_join( df_analysis_combined2, by = "CLUSTERCOL") %>%
+        # compute weights and area across clusters & base unit dimensions
+        cluster_weight <- df_base_unit                                                        %>%
+          unite(., CLUSTERCOLBASE,  c( all_of( cluster_UUID_), all_of( arena.analyze$dimensions_baseunit)), sep = "--", remove = FALSE) %>%
+          dplyr::select( all_of(cluster_UUID_), CLUSTERCOLBASE, weight, exp_factor_)          %>%
+          dplyr::summarize(weight = sum( weight), exp_factor_ = sum( exp_factor_), .by = "CLUSTERCOLBASE")
+        
+        df_analysis_combined  <- df_analysis_combined                                         %>%
+          unite(., CLUSTERCOLBASE,  c( all_of( cluster_UUID_), all_of( arena.analyze$dimensions_baseunit)), sep = "--", remove = FALSE) %>%
+          unite(., CLUSTERCOL    ,  c( all_of( cluster_UUID_), all_of( arena.analyze$dimensions)),          sep = "--", remove = FALSE) %>%
+          dplyr::select( CLUSTERCOL, CLUSTERCOLBASE, all_of(resultVariables))                 %>%           
+          dplyr::summarize( across( ends_with( "Total" ), ~sum( .x)), .by= c("CLUSTERCOL","CLUSTERCOLBASE")) %>%
+          left_join( cluster_weight , by = "CLUSTERCOLBASE")                                  %>%
+          dplyr::mutate( across( ends_with( ".Total" ), list( Mean= ~ .x/exp_factor_)))       %>%
+          setNames( stringr::str_replace( names(.), ".Total_", "."))                          %>%
+          dplyr::left_join( df_analysis_combined2 %>% select( -weight), by = "CLUSTERCOL")    %>%
+          select( -CLUSTERCOLBASE)                                                            %>%
           data.frame()
         
         df_analysis_weights <- df_analysis_combined      %>%
-          dplyr::select(CLUSTERCOL, exp_factor_, weight) %>%           
-          dplyr::summarize( across(ends_with( "Total" ), ~sum( .x)), exp_factor_ = sum(exp_factor_), weight=mean(weight), .by = "CLUSTERCOL") %>%
+          dplyr::select(CLUSTERCOL, exp_factor_, weight) %>%
           data.frame()
+        
+        df_analysis_weights[is.na(df_analysis_weights)] <- 0
 
       }
       

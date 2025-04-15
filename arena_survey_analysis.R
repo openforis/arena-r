@@ -1,4 +1,4 @@
-#* #######################################################################
+# #######################################################################*
 #
 # The function 'arenaAnalytics' is used to compute statistical results for area-based quantitative variables in the Open Foris Arena platform.
 # The script can also compute area estimates for given combination of dimensions. 
@@ -21,7 +21,7 @@
 #               
 # Notice: Method for computing results with "post-stratification" is not yet working. 
 # 
-########################################################################
+########################################################################*
 #  How to call this script:
 # option 1. Dimensions got from Arena UI:
 #
@@ -49,7 +49,7 @@
 #   cat("\n")
 # }
 #
-#########################################
+#########################################*
 ### Note: 'dimension_list' can also be missing. In that case dimensions are read from UI via json
 #
 # An example of dimension_list:
@@ -64,7 +64,7 @@
 # [1] "forest_category"  "province"         "forest_area_name" "plot_grazing" 
 
 
-#######################################################################
+#######################################################################*
 
 
 arenaReadJSON <- function( dimension_list_arg ) {
@@ -170,7 +170,7 @@ arenaReadJSON <- function( dimension_list_arg ) {
   return( list(arena.analyze, arena.chainSummary) )
 } # arenaReadJSON
 
-#########################################################################
+#########################################################################*
 
 conversion_HierarchicalCodeAttributes <- function( df_data, arena.chainSummary ) {
   # This function is used for re-coding hierarchical categorical data, so that a child category item gets all its parents' codes, separated with asterisk (*)
@@ -196,7 +196,7 @@ conversion_HierarchicalCodeAttributes <- function( df_data, arena.chainSummary )
 } 
 
 
-#########################################################################
+#########################################################################*
 
 joinLabels <- function( result_labels, out_table) { 
   # function to join dimensions' label texts with output tables which contain coded data
@@ -217,19 +217,20 @@ joinLabels <- function( result_labels, out_table) {
 }
 
 
-#########################################################################
+#########################################################################*
 
 # MAIN PROGRAM
 
 arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
   
   
-  # set  options, see more at https://r-survey.r-forge.r-project.org/survey/html/surveyoptions.html
+  # A. Set "survey" package options --------------------------------------------------------------------
+  # see more at https://r-survey.r-forge.r-project.org/survey/html/surveyoptions.html ---
   #options(dplyr.summarise.inform      = FALSE)
   options( survey.ultimate.cluster     = FALSE)
   options( survey.adjust.domain.lonely = FALSE)
   options( survey.lonely.psu           = "remove")  
-  options( digits = 10)
+  options( digits                      = 10)
   old_sigfig      <- options("pillar.sigfig") # https://github.com/gergness/srvyr/blob/main/vignettes/srvyr-vs-survey.Rmd
   options( "pillar.sigfig" = 5)
   
@@ -249,16 +250,18 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
     
   usePackage('tidyr')
   
-  
-  # Read json data
+
+  # B. Read json data -------------------------------------------------------
+
   arena_return        <- arenaReadJSON( dimension_list_arg )
   if (!is.list(arena_return)) return( arena_return ) # Error or no data message is returned
   arena.analyze       <- arena_return[[1]]
   arena.chainSummary  <- arena_return[[2]]
   rm(arena_return)
   
-  ############################################################################
-  # Two-phase sampling. Only for area estimation. 
+  
+# C. Two-phase sampling for area estimation ----------------------------------
+  
   if (arena.chainSummary$samplingStrategy == 5) {
     source( "https://raw.githubusercontent.com/openforis/r-arena/master/two_phase_sampling_area_estimation.R")
     twoPhaseSampling_results <- arenaTwoPhaseSampling_area_estimates(arena.analyze, arena.chainSummary)
@@ -267,18 +270,19 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
     # area results by "jointCategoryClasses":  names(twoPhaseSampling_results[[5]][1]), and twoPhaseSampling_results[[5]][[1]]$estimation  e.g.
   }  
   
+  # no 
+  if ( !arena.chainSummary$samplingDesign ) return("No sampling design in this chain")
   
   
-  #############################
-  # SAMPLING DESIGN EXISTS. ###
+  # SAMPLING DESIGN EXISTS. 
   # Compute expansion factors, sum of area-based variables & weights up to base unit level, and non-response bias corrections
-  if ( arena.chainSummary$samplingDesign ) {
-    
-    # define a folder for output files
+   
+
+# D. Create a folder for output data --------------------------------------
+
     if ( !exists('user_file_path')) user_file_path <- './user_output/'
     # create a folder for files to be exported
     if ( !dir.exists( user_file_path )) dir.create( user_file_path, showWarnings = FALSE )
-    
     
     # get all files in the main output folder
     f <- list.files(user_file_path, full.names = TRUE, recursive = FALSE)
@@ -292,9 +296,13 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
     dir.create( paste0( user_file_path, out_path ), showWarnings = FALSE )
     
     
+
+# E. Read base unit data and parameters--------------------------------------------------
+
     # get base unit data into a data frame
     df_base_unit                   <- get( arena.chainSummary$baseUnit )
     df_base_unit$weight[ is.na( df_base_unit$weight)] <- 0
+    # next function is used for re-coding hierarchical categorical attributes, so that a child category item gets all its parents' codes, separated with asterisk (*)
     df_base_unit                   <- conversion_HierarchicalCodeAttributes( df_base_unit, arena.chainSummary)
     
     # take a copy of weight. Non-response bias correction may change weights. 
@@ -306,7 +314,10 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
     arena.analyze$stratification   <- ifelse(( arena.chainSummary$samplingStrategy == 3 | arena.chainSummary$samplingStrategy == 4  | arena.chainSummary$samplingStrategy == 5 ) & arena.chainSummary$stratumAttribute != "", TRUE, FALSE)
     arena.analyze$strat_attribute  <- ifelse( arena.analyze$stratification, arena.chainSummary$stratumAttribute, "")
     
-    # Two-phase sampling, use combined attribute as stratum (Stratum__Common attribute)  
+
+# F. Two-phase sampling, apply combined attribute as stratum attribute -------------------
+    
+    # combined attribute as stratum: Stratum__Common attribute  
     if (arena.chainSummary$samplingStrategy == 5 & arena.analyze$stratification) { 
       arena.analyze$strat_attribute                         <- paste( arena.chainSummary$stratumAttribute, arena.chainSummary$commonAttribute, sep = "__")
       arena.chainSummary$stratumAttributeCategory_2phase    <- arena.analyze$strat_attribute
@@ -314,7 +325,7 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
       df_base_unit[[arena.analyze$strat_attribute]]         <- paste( df_base_unit[[arena.chainSummary$stratumAttribute]], df_base_unit[[arena.chainSummary$commonAttribute]], sep = "__")
     }
     
-    # parameters for post-stratification
+    # parameters for post-stratification, NOT EFFECTIVE YET
     
     ps.weights                     <- NULL 
     # if post-stratification attribute is missing, set ""
@@ -349,14 +360,18 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
     } # (arena.chainSummary$postStratificationAttribute != "")
     
     
+
+    # G1. Read AOIs (areas of strata) -----------------------------------------
+
     aoi_df     <- NULL
-    
-    
     
     if ( arena.analyze$stratification ) {
       aoi_df        <- as.data.frame( categories[[ arena.chainSummary$stratumAttributeCategory ]]) %>%
         mutate(code = as.character(code), code_joint = as.character(code_joint) )
       
+
+      # G2. Read PSU and SSU numbers --------------------------------------------
+      # PSU = primary sampling unit, SSU = secondary sampling unit
       if ( arena.chainSummary$analysis$nonResponseBiasCorrection ) {
         if (  'design_psu' %in% names( aoi_df) & !'design_ssu' %in% names( aoi_df)) aoi_df$design_ssu <- 0
         if ( !'design_psu' %in% names( aoi_df) &  'design_ssu' %in% names( aoi_df)) aoi_df$design_psu <- 0
@@ -374,8 +389,9 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
       }
       
       if ( arena.analyze$post_stratification )  aoi_df$area <- NULL 
-      
-      # if hierarchical table, take data from the correct level
+
+      # G3. read AOI data from the correct level --------------------------------
+      # if hierarchical table
       if (('level_1_code' %in% names( aoi_df )) & ('area_cumulative' %in% names( aoi_df ))) {
         
         # set missing area to 0
@@ -413,14 +429,17 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
       } else if ( arena.analyze$reportingArea > 0 ) {
         aoi_df$area <- 0.0
       } else if ( !arena.analyze$post_stratification ) {
-        print(paste0( "''area' column for strata missing in table '", arena.chainSummary$stratumAttributeCategory, "'. Stratification cannot be applied!!")) 
+        print(paste0( "''area' column for strata is missing in table '", arena.chainSummary$stratumAttributeCategory, "'. Stratification cannot be applied!!")) 
         arena.analyze$stratification <- FALSE
       } else {
         arena.analyze$stratification <- FALSE
       }
     } 
     
-    # CLUSTER SAMPLING: assign  cluster weights. Base units' weights are re-scaled so that the sum of weights in a cluster is equal to 1. 
+
+# H. Assign  cluster weights ---------------------------------------------
+    
+    # CLUSTER SAMPLING: Base units' weights are re-scaled so that the sum of weights in a cluster is equal to 1. 
     
     if (cluster_UUID_ != "" ) {
       
@@ -433,13 +452,16 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
       df_base_unit$weight[ is.na(df_base_unit$weight) ] <- 0
     } 
     
-    
-    # NO NONRESPONSE CORRECTION, or DEFAULT NON-RESPONSE CORRECTION VALUES
+
+# I.Set default non-response correction values ---------------------------
+
     df_base_unit$arena_psu_correction       <- 1  # correction factor for PSUs
     df_base_unit$arena_ssu_correction       <- 1  # correction factor for SSUs
     
-    
-    # A. MISSING SECONDARY SAMPLING UNITS (SSUs): nonresponse bias correction, naive imputation method
+
+    # J1. Apply nonresponse bias correction for weights: SSUs ----------------------------
+
+    # MISSING SECONDARY SAMPLING UNITS (SSUs): non-response bias correction, naive imputation method
     if ( arena.analyze$stratification & !is.null( aoi_df) & cluster_UUID_ != "" & arena.chainSummary$analysis$nonResponseBiasCorrection) {  # aoi exist
       aoi_df[ arena.analyze$strat_attribute ] <- aoi_df$code
       
@@ -490,7 +512,10 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
     # 1. non-stratified sampling, compute expansion factor for the base unit
     # 2. stratified sampling,  bias correction for missing clusters/plots
     
-    # B STRATIFIED SAMPLING, MISSING PRIMARY SAMPLING UNITS (PSUs): nonresponse bias correction, naive imputation method
+
+    # J2. Apply nonresponse bias correction for weights: PSUs -----------------------------
+
+    # STRATIFIED SAMPLING, MISSING PRIMARY SAMPLING UNITS (PSUs): non-response bias correction, naive imputation method
     if ( arena.analyze$stratification & !is.null( aoi_df ) & arena.chainSummary$analysis$nonResponseBiasCorrection ) {  
       aoi_df[ arena.analyze$strat_attribute ] <- aoi_df$code
       
@@ -531,14 +556,16 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
         } # if (sum(aoi_df$design_psu > 0)
       }
     }
-    
-    # add SSU and PSU non-response bias corrections to weight
+
+  # J3. Add SSU and PSU non-response bias corrections to weight -------------
     df_base_unit$weight <- df_base_unit$weight * df_base_unit$arena_ssu_correction * df_base_unit$arena_psu_correction
     
+
+  # K. Calculate area expansion factors for base units ----------------------
     
-    # calculate expansion factors for AOIs. AOI table exists
     df_base_unit$exp_factor_ <- NULL
     
+    # AOI table exists?
     if ( arena.analyze$stratification & !is.null( aoi_df)) {
       aoi_df[ arena.analyze$strat_attribute ] <- aoi_df$code
       
@@ -587,6 +614,7 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
         dplyr::mutate( exp_factor_ = exp_factor_ * weight)
       
     } else if ( arena.analyze$reportingArea > 0 ) {
+      # area is read from the UI: arena.analyze$reportingArea
       df_base_unit$exp_factor_   <- arena.analyze$reportingArea / sum( df_base_unit$weight) * df_base_unit$weight
       
     } else {
@@ -596,11 +624,12 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
     
     df_base_unit$exp_factor_[ is.na( df_base_unit$exp_factor_) ] <- 0
     
-    ##########################################################################################
+    ##########################################################################################*
     
-    
-    
-    # get a list of active area-based result variables (of all entities)
+
+# L. Get list of active area-based result variables --------
+
+    # active area-based result variables (of all entities)
     # parents of base units cannot have area-based variables!
     result_entities <- arena.chainSummary$resultVariables %>%
       dplyr::filter( areaBased == TRUE & active == TRUE & stringr::str_detect(entityPath, arena.chainSummary$baseUnit))  %>%
@@ -618,28 +647,33 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
     
     # ADD area estimates based on exp_factor
     
+
+# M1. Loop across result entities [i] --------------------------------------
+
     # Quantitative result variables against categorical and taxonomic data
     for ( i in (1:length(result_entities))) {
       
       # PART 1.compute sums (per AOIs) and means (/ha) across all categorical variables 
       # drop out columns where all data is NA.  https://stackoverflow.com/questions/2643939/remove-columns-from-dataframe-where-all-values-are-na
       
-      df_entitydata              <- get(result_entities[[i]])
+      df_entitydata              <- get( result_entities[[i]])
+      # next function is used for re-coding hierarchical categorical attributes, so that a child category item gets all its parents' codes, separated with asterisk (*)
       df_entitydata              <- conversion_HierarchicalCodeAttributes( df_entitydata, arena.chainSummary )
       
+
+      # M2. List of all categorical, taxonomic and boolean attributes -----------
       
+      # categorical, taxonomical
       result_cat_attributes[[i]] <- ( df_entitydata  %>% select( where( ~!all( is.na(.)))) %>% select( where( ~is.character(.))) )  %>%
         select(ends_with("_label") | ends_with("_scientific_name")) %>% 
         names()
-      
+
+      # booleans
       boolean_list <-  ( df_entitydata  %>% select( where( ~!all( is.na(.)))) %>% select( where( ~is.logical(.))) )  %>%
-        # select(where(~all( .=="false" | .=="true"))) %>% 
-        # select(where(~!all(.=="false")))             %>%
-        # select(where(~!all(.=="true")))              %>% 
         names()
       
-      if (length(boolean_list) > 0) result_cat_attributes[[i]] <- unique( c(result_cat_attributes[[i]], boolean_list))
-      #        rm(boolean_list)
+      if (length( boolean_list) > 0) result_cat_attributes[[i]] <- unique( c(result_cat_attributes[[i]], boolean_list))
+      # rm( boolean_list)
       
       # Remove: _label, _scientific_name 
       result_cat_attributes[[i]] <- ifelse( stringr::str_sub(result_cat_attributes[[i]], -6, -1)  == "_label",           stringr::str_sub(result_cat_attributes[[i]], 0, -7),  result_cat_attributes[[i]] )  
@@ -686,7 +720,9 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
       
       
       if (result_entities[[i]] != arena.chainSummary$baseUnit) {
-        
+
+        # M3. List of base unit IDs that are not in entity data -------------------
+
         # get a list of base unit IDs that are not in entity data (i.e. treeless plots)
         missing_ids     <- setdiff( unique( unlist( df_base_unit %>% filter( weight > 0) %>% select( all_of( base_UUID_)) )), unique( unlist( df_entitydata[ base_UUID_] )))
         
@@ -704,7 +740,9 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
         }
         
         rm( missing_ids )
-        
+
+        # M4. Total and mean for each result category group at base unit --------
+
         # Compute mean and total for each result category group
         result_cat[[i]] <- result_cat[[i]]                             %>%
           dplyr::right_join( df_base_unit %>% select( all_of( base_UUID_), exp_factor_), by = base_UUID_ ) %>% # join expansion factor
@@ -729,7 +767,8 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
           data.frame()
       }
       
-      
+      # M5. Finalize OLAP table -------------------------------------------------
+
       # add weight, exp_factor_; AND IF EXISTS: cluster_UUID_, arena.analyze$strat_attribute (This is actually already in dataframe because it is categorical!) 
       temp_list_variables <- c(base_UUID_, "weight", "exp_factor_")
       if ( cluster_UUID_ != ""    &  !( cluster_UUID_ %in% names(result_cat[[i]])) )        temp_list_variables <- c( temp_list_variables, cluster_UUID_)
@@ -740,7 +779,11 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
       
       rm( temp_list_variables )
       
-      ## PART 2a. get results at the base unit level for each result variable for OLAP
+
+      # M6. OLAP: Compute per hectare results at base unit level for res. variables  --------
+      
+      # Note: above-computed Means are not used!
+      ## get results at the base unit level for each result variable for OLAP
       if (result_entities[[i]] != arena.chainSummary$baseUnit) {
         out_path  <- "OLAP/"
         dir.create( paste0( user_file_path, out_path ), showWarnings = FALSE )
@@ -794,6 +837,8 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
         }
         rm( data_names); rm( Col_name)
         
+        # M7. Write OLAP table into CSV -------------------------------------------
+
         out_file_name <- paste0(user_file_path, "OLAP/OLAP_", result_entities[i], ".csv")
         tryCatch({if (exists('user_file_path'))  write.csv(out_file_data, out_file_name,  row.names = F)},
                  warning = function( w ) { cat("No output - OLAP data") },
@@ -801,8 +846,10 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
                  })
         rm( keys_to_add ); rm( out_file_data ); rm( out_file_name )
       }      
+
+      # M8. Per hectare results at base unit level (out) --------
       
-      ## PART 2b. compute sum of per hectare results at the base unit level for each result variable
+      ## Per hectare results at the base unit level for each result variable (out)
       base_unit.results[[i]] <- df_entitydata %>%
         # Add expansion factor for all result entities
         dplyr::right_join(( df_base_unit %>% select( all_of( base_UUID_), weight, exp_factor_)), by = base_UUID_) %>%
@@ -818,8 +865,10 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
       df_base_unit <- df_base_unit %>%
         dplyr::left_join( base_unit.results[[i]], by = base_UUID_)
       
+
+      # M9. Per hectare results at cluster level (out)  -------------------------
       
-      ## PART 3. compute sum of per hectare results at the cluster level for each result variable
+      ## compute sum of per hectare results at the cluster level for each result variable
       
       if ( cluster_UUID_ != "" ) {
         
@@ -841,17 +890,19 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
     
     names(result_cat) <- result_entities    
     
-  } # END OF (arena.chainSummary$samplingDesign == TRUE)
   
   
-  
-  ###############################################################################################
-  # SAMPLING STRATEGIES AND RELIABILITY
+# ******************************************************************* -----
+# 2. SAMPLING STRATEGIES AND RELIABILITY ----------------------------------
   
   # do analysis based on reportingMethod
   # '1' = Combination of dimensions (default)
   # '2' = Dimensions separately
   
+    
+
+  # N. Filtering of data with given script in UI ----------------------------
+    
   # ****************************************************
   # do first filtering, if filter clause exists. If error, ignore a filter rule      
   processMessage <- tryCatch({ if ( arena.analyze$filter != "" ) {  
@@ -872,9 +923,12 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
   arena.analyze$dimensions_input                <- arena.analyze$dimensions
   arena.analyze$dimensions_at_baseunit_input    <- arena.analyze$dimensions_at_baseunit
   
+  # O. Reporting method? ----------------------------------------------------
+
   if ( arena.analyze$reportingMethod == '1' ) arena.reportingLoops = 1
   if ( arena.analyze$reportingMethod == '2' ) arena.reportingLoops = length( arena.analyze$dimensions )
   
+  # If '2', run a loop over Dimensions (rep_loop)
   
   for ( rep_loop in (1 : arena.reportingLoops )) {
     if ( arena.analyze$reportingMethod == '2' ) {
@@ -888,14 +942,20 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
       dir.create( paste0( user_file_path, "dimensions/", arena.analyze$dimensions ), showWarnings = FALSE )
     } 
     
-    # get labels to the categorical result variables, [1]: input attribute, [2]: result attribute 
+
+    # P1. Assign labels to the categorical and taxonomic result attributes --------
+    
+    # [1]: input attribute, [2]: result attribute 
     result_labels           <- list() 
     
     result_names_category_1 <- setdiff(   arena.analyze$dimensions, arena.chainSummary$resultVariables$name) # cat. attributes in input data 
     result_names_category_2 <- intersect( arena.analyze$dimensions, arena.chainSummary$resultVariables$name) # cat. attributes as result attributes
     
-    # join stratification attribute labels
-    # Works on two-phase still here
+
+    # Q. If stratification, add strat. attribute into Dimensions --------
+    
+    # required by 'survey' package that stratification attibute is in the input data
+    # (Works on two-phase still here)
     if ( arena.analyze$stratification ) {
       if (arena.chainSummary$samplingStrategy !=5 & !(arena.analyze$strat_attribute %in% result_names_category_1) & !(arena.analyze$strat_attribute %in% result_names_category_2)) {
         if (arena.analyze$strat_attribute %in% arena.chainSummary$resultVariables$name) {
@@ -907,9 +967,11 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
         arena.analyze$dimensions_baseunit     <- c(arena.analyze$dimensions_baseunit, arena.analyze$strat_attribute)
       } 
     }
+    # P2. Assign labels to the categorical and taxonomic result attributes --------
     
     if (length( result_names_category_1 ) > 0) {
       df_cat_report <- get( arena.analyze$entity) 
+      # next function is used for re-coding hierarchical categorical attributes, so that a child category item gets all its parents' codes, separated with asterisk (*)
       df_cat_report <- conversion_HierarchicalCodeAttributes( df_cat_report, arena.chainSummary )
       
       df_cat_report <- df_cat_report %>%  
@@ -1017,18 +1079,20 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
     if ( arena.analyze$post_stratification ) dimension_names <- unique( c( dimension_names, arena.chainSummary$postStratificationAttribute ))
     
     
-    ########################################
-    # Data into the analysis
-    ########################################
+    ########################################*
+    # R. Read data into statistical analysis ----------------------------------
+    ########################################*
     df_analysis_combined <- result_cat[[ arena.analyze$entity ]]
     
-    ########################################
-    # generate new base units, which are missing each combination of data
-    # if there are non-base unit cat. dimensions.
+    ########################################*
+    # S. Generate new base units, which contain missing combinations --------
+    # 
+    # generate new base units, which contain missing combinations of data
+    # e.g. if there are non-base unit cat. dimensions.
     # https://tidyr.tidyverse.org/reference/complete.html
     # https://stackoverflow.com/questions/40577484/using-tidyr-complete-with-column-names-specified-in-variables
-    ########################################
-    
+    ########################################*
+
     if ( !all( arena.analyze$dimensions_at_baseunit)) {
       names_to_drop <- dimension_names[ dimension_names %in% arena.analyze$dimensions_baseunit ]
       if (cluster_UUID_ != "") names_to_drop <- c( names_to_drop, cluster_UUID_)
@@ -1061,8 +1125,8 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
     }
     
     
-    
-    # compress data in cluster sampling
+    # T. Compress data for cluster sampling analytics -------------------------
+
     # entity_count_ : number of base units in a cluster, or in clustered sampling this means number of clusters
     if ( cluster_UUID_ != "" & !arena.chainSummary$analysis$clusteringVariances ) {
       
@@ -1080,9 +1144,11 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
         dplyr::mutate( name = paste0( name, "_ha.Total")) %>%
         pull( name) 
       
-      if ( all( arena.analyze$dimensions_at_baseunit)) {   # all dimensions are at the base unit or above
 
-        
+      # U. All dimensions are at the base unit or above? ------------------------
+  
+      if ( all( arena.analyze$dimensions_at_baseunit)) {
+
         df_analysis_combined  <- df_base_unit                        %>%
           unite(., CLUSTERCOL,  c( all_of( cluster_UUID_), all_of( arena.analyze$dimensions)), sep = "--", remove = FALSE) %>%
           dplyr::select(CLUSTERCOL, exp_factor_, weight, all_of(resultVariables)) %>%           
@@ -1132,7 +1198,8 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
       df_analysis_combined[ is.na(df_analysis_combined) ] <- 0
       rm( df_analysis_combined2)
       
-      
+
+    # U3. Clustering  only for computing variances? --------------------------------
     } else if ( cluster_UUID_ != "" & arena.chainSummary$analysis$clusteringVariances ) {
       ids_2_survey        <- cluster_UUID_
       
@@ -1140,7 +1207,7 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
         distinct( !!! syms( base_UUID_), .keep_all = T)                         %>% 
         dplyr::select( all_of( base_UUID_), weight, exp_factor_)
       
-      
+    # no clustering  
     } else {
       ids_2_survey          <- NULL
       
@@ -1149,7 +1216,9 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
         dplyr::select( all_of( base_UUID_), weight, exp_factor_)
     } 
     
-    
+
+    # V. Build df_analysis_area for area analysis -----------------------------
+
     df_analysis_area    <- df_analysis_combined                                 %>%
       dplyr::filter( weight > 0 )                                               %>%
       dplyr::group_by(  across( all_of( dimension_names )))                     %>%
@@ -1201,10 +1270,14 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
     }
     
     if ( arena.chainSummary$samplingStrategy %in% c(1:4)) { 
-      # 1. SIMPLE RANDOM SAMPLING, cluster/non-cluster
-      # 2. SYSTEMATIC SAMPLING, cluster/non-cluster 
-      # 3. STRATIFIED RANDOM SAMPLING, cluster/non-cluster  
-      # 4. STRATIFIED SYSTEMATIC SAMPLING, cluster/non-cluster
+      
+      # X. Create design files for 'survey' -------------------------------------
+
+      # arena.chainSummary$samplingStrategy:
+      #  1. SIMPLE RANDOM SAMPLING, cluster/non-cluster
+      #  2. SYSTEMATIC SAMPLING, cluster/non-cluster 
+      #  3. STRATIFIED RANDOM SAMPLING, cluster/non-cluster  
+      #  4. STRATIFIED SYSTEMATIC SAMPLING, cluster/non-cluster
       
       arena.weights <- ifelse( arena.analyze$stratification & arena.analyze$stratification_area_exists, "exp_factor_", "weight") 
       
@@ -1289,7 +1362,10 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
     # NOTE: calculate the proportion or count in each group of a factor or character variable by leaving x empty in survey_mean() or survey_total()
     # https://cran.r-project.org/web/packages/srvyr/vignettes/srvyr-vs-survey.html
     
-    # drop out stratification attributes from result tables if these are not selected as dimensions  
+
+    # Y. Drop out stratification attribute from result tables -----------------
+    
+    # drop out stratification attribute from result tables IF this is not selected as dimension  
     if ( arena.analyze$stratification & arena.analyze$reportingMethod == '1' & !( arena.analyze$strat_attribute %in% arena.analyze$dimensions_input )) {
       arena.analyze$dimensions          <- arena.analyze$dimensions[! arena.analyze$dimensions                   %in% c( arena.analyze$strat_attribute)]
       arena.analyze$dimensions_baseunit <- arena.analyze$dimensions_baseunit[! arena.analyze$dimensions_baseunit %in% c( arena.analyze$strat_attribute)]
@@ -1305,6 +1381,9 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
       arena.analyze$dimensions          <- arena.analyze$dimensions[! arena.analyze$dimensions                   %in% c( arena.chainSummary$postStratificationAttribute, 'postStratificationAttribute')]
       arena.analyze$dimensions_baseunit <- arena.analyze$dimensions_baseunit[! arena.analyze$dimensions_baseunit %in% c( arena.chainSummary$postStratificationAttribute, 'postStratificationAttribute')]
     }
+    
+
+    # Z. Execute the SURVEY ---------------------------------------------------
     
     # AREA 
     out_area <- design_srvyr_area                           %>%
@@ -1392,7 +1471,7 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
       rm(var_global_total); rm(var_SRS_total)
       
     }
-    #######################################
+    #######################################*
     # remove extra '_tally' columns by groups, leave just one tally row
     if ("_tally" %in% stringr::str_sub( colnames(out_mean), -6, -1)) {
       tally_out          <- out_mean %>% select( ends_with("_tally"))  %>% select(1) 
@@ -1605,6 +1684,6 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
 
 
 
-###################################################################
+###################################################################*
 # END -------------------------------------------------------------
-###################################################################
+###################################################################*

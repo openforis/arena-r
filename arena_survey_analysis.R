@@ -719,11 +719,11 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
         pull( name) 
       
       
-      if (result_entities[[i]] != arena.chainSummary$baseUnit) {
+      if (result_entities[[i]] != arena.chainSummary$baseUnit) { # result entity is not same as base unit entity
 
         # M3. List of base unit IDs that are not in entity data -------------------
-
-        # get a list of base unit IDs that are not in entity data (i.e. treeless plots)
+        # (e.g. treeless plots)
+        
         missing_ids     <- setdiff( unique( unlist( df_base_unit %>% filter( weight > 0) %>% select( all_of( base_UUID_)) )), unique( unlist( df_entitydata[ base_UUID_] )))
         
         if ( length( missing_ids) > 0) {
@@ -741,9 +741,8 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
         
         rm( missing_ids )
 
-        # M4. Total and mean for each result category group at base unit --------
+        # M4. Total (and mean) for each category & boolean & taxon combination at base unit level --------
 
-        # Compute mean and total for each result category group
         result_cat[[i]] <- result_cat[[i]]                             %>%
           dplyr::right_join( df_base_unit %>% select( all_of( base_UUID_), exp_factor_), by = base_UUID_ ) %>% # join expansion factor
           dplyr::group_by(  across( result_cat_attributes[[i]] ))      %>%
@@ -752,9 +751,6 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
                                    .names = "{.col}.{.fn}"), 
                             entity_count_ = n() )                      %>%
           data.frame() 
-        # %>%
-        # in cases where reporting entity contains an categ. attribute and missing base unit ids, there are NAs. These are removed. 
-        # drop_na()
         
       } else { # entity is the base unit
         result_cat[[i]] <- df_entitydata                               %>%
@@ -782,7 +778,7 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
 
       # M6. OLAP: Compute per hectare results at base unit level for res. variables  --------
       
-      # Note: above-computed Means are not used!
+      # Note: above-computed (M4) Means are not used!
       ## get results at the base unit level for each result variable for OLAP
       if (result_entities[[i]] != arena.chainSummary$baseUnit) {
         out_path  <- "OLAP/"

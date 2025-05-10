@@ -1384,10 +1384,22 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
       as.data.frame(.)                                      %>%
       setNames( stringr::str_replace( names(.), ".Mean_2", ".Mean")) 
     
+    # take out several extra "_tally" columns, keep 1
+    if ("_tally" %in% stringr::str_sub( colnames(out_mean), -6, -1)) {
+      tally_out          <- out_mean %>% select( ends_with("_tally"))  %>% select(1) 
+      names( tally_out ) <- "tally"
+      out_mean           <- out_mean %>% select( -ends_with("_tally")) %>% cbind( tally_out )
+      rm( tally_out )
+    }
+    
+    # convert standard error into standard deviation
+    out_mean <- out_mean %>%
+      mutate( across( ends_with("_se"),   ~ .x * sqrt(tally) )) 
+    
     
     # compute totals, multiple the means by areas
     out_mean_chr   <- out_mean %>% select( where( is.character))
-    out_mean_num   <- out_mean %>% select( where( is.numeric), ends_with("_tally"))
+    out_mean_num   <- out_mean %>% select( where( is.numeric), tally)
     out_total      <- out_area$area * out_mean_num
     out_total[ is.na(out_total)] <- 0
     
@@ -1454,15 +1466,7 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
       rm(var_global_total); rm(var_SRS_total)
       
     }
-    #######################################*
-    # remove extra '_tally' columns by groups, leave just one tally row
-    if ("_tally" %in% stringr::str_sub( colnames(out_mean), -6, -1)) {
-      tally_out          <- out_mean %>% select( ends_with("_tally"))  %>% select(1) 
-      names( tally_out ) <- "tally"
-      out_mean           <- out_mean %>% select( -ends_with("_tally")) %>% cbind( tally_out )
-      rm( tally_out )
-    }
-    
+
     #  name "arena_post_stratum_attribute"
     # if (arena.analyze$post_stratification & !(arena.chainSummary$postStratificationAttribute %in% arena.analyze$dimensions)) {
     #     names(out_mean)[names(out_mean)   == 'postStratificationAttribute'] <- arena.chainSummary$postStratificationAttribute

@@ -877,7 +877,7 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
   # ****************************************************
   # do first filtering, if filter clause exists. If error, ignore a filter rule      
   processMessage <- tryCatch({ if ( arena.analyze$filter != "" ) {  
-    df_analysis_combined <- df_analysis_combined %>%
+    result_cat[[ arena.analyze$entity ]] <- result_cat[[ arena.analyze$entity ]] %>%
       filter( eval( parse( text = arena.analyze$filter )))
     processMessage
   }},
@@ -1198,7 +1198,19 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
                                 .names = "{.col}") )                             %>%
       data.frame()
     
-    
+    if (all( arena.analyze$dimensions_at_baseunit)) {
+
+      df_analysis_combined<- df_base_unit         %>%
+        data.frame()                              %>%
+        dplyr::filter( weight > 0 )               %>%
+        select(all_of( cat_names_uuid), all_of( arena.analyze$dimensions), all_of(cat_names_num)) %>%
+        dplyr::group_by(  across( unique( c( cat_names_uuid, arena.analyze$dimensions)))) %>%
+        dplyr::summarize( across( .cols= all_of( cat_names_num), 
+                                  list( Total = ~sum( .x, na.rm = TRUE )),  
+                                  .names = "{.col}") )                                    %>%
+        data.frame()
+    } else {
+      
     df_analysis_combined <- df_analysis_combined                                %>%
       dplyr::filter( weight > 0 )                                               %>%
       dplyr::group_by(  across( unique( c( cat_names_uuid, arena.analyze$dimensions)))) %>%
@@ -1206,7 +1218,7 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
                                 list( Total = ~sum( .x, na.rm = TRUE )),  
                                 .names = "{.col}") )                             %>%
       data.frame()
-    
+    }
     
     if ( cluster_UUID_ != "" & !arena.chainSummary$analysis$clusteringVariances ) {
       df_analysis_area <- df_analysis_area                             %>%

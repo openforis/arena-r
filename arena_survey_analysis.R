@@ -879,7 +879,7 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
   processMessage <- tryCatch({ if ( arena.analyze$filter != "" ) {  
     result_cat[[ arena.analyze$entity ]] <- result_cat[[ arena.analyze$entity ]] %>%
       filter( eval( parse( text = arena.analyze$filter )))
-    processMessage
+#    processMessage
   }},
   warning = function( w ) { 
     cat("Error in filter clause - Filter not applied!") 
@@ -1379,31 +1379,23 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
     # MEANS (per hectares) for selected categories
     out_mean  <- design_srvyr_mean                          %>%
       dplyr::group_by( across( arena.analyze$dimensions ))  %>%     
-      dplyr::summarize( across( ends_with(".Mean") ,     
-                                list( tally = ~sum( !is.na(.)), ~survey_mean( ., na.rm = FALSE, vartype = c("se", "var", "ci"), proportion = FALSE, level=arena.chainSummary$analysis$pValue )))) %>% 
+      dplyr::summarize( tally = n(), across( ends_with(".Mean") ,      
+                                             list(  ~survey_mean( ., na.rm = FALSE, vartype = c("se","ci"), proportion = FALSE, level=arena.chainSummary$analysis$pValue )))) %>% 
       as.data.frame(.)                                      %>%
-      setNames( stringr::str_replace( names(.), ".Mean_2", ".Mean")) 
-    
-    # take out several extra "_tally" columns, keep 1
-    if ("_tally" %in% stringr::str_sub( colnames(out_mean), -6, -1)) {
-      tally_out          <- out_mean %>% select( ends_with("_tally"))  %>% select(1) 
-      names( tally_out ) <- "tally"
-      out_mean           <- out_mean %>% select( -ends_with("_tally")) %>% cbind( tally_out )
-      rm( tally_out )
-    }
-    
-    # convert standard error into standard deviation
-    out_mean <- out_mean %>%
-      mutate( across( ends_with("_se"),   ~ .x * sqrt(tally) )) 
+      setNames( stringr::str_replace( names(.), ".Mean_1", ".Mean")) %>%
+      mutate( across( ends_with(".Mean_se"), ~ .x * sqrt(tally), .names="{.col}" ))
     
     
     # compute totals, multiple the means by areas
-    out_mean_chr   <- out_mean %>% select( where( is.character))
-    out_mean_num   <- out_mean %>% select( where( is.numeric), tally)
-    out_total      <- out_area$area * out_mean_num
+    out_mean_chr    <- out_mean %>% select( where( is.character))
+    out_mean_num    <- out_mean %>% select( where( is.numeric))
+    
+    out_total       <- out_area$area * out_mean_num
     out_total[ is.na(out_total)] <- 0
     
-    out_total      <- cbind( out_mean_chr, out_total ) 
+    out_total       <- cbind( out_mean_chr, out_total ) 
+    out_total$tally <- NULL
+    
     if (!("area" %in% names( out_total))) out_total$area <- out_area$area  
     rm( out_mean_num ); rm( out_mean_chr )      
     

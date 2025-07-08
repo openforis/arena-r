@@ -843,17 +843,18 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
       
       if ( cluster_UUID_ != "" ) {
         
-        cluster.results[[i]] <- df_base_unit %>% 
-          dplyr::group_by( across( all_of( cluster_UUID_ )))  %>%
-          dplyr::summarize( across(ends_with( "Total" ), ~sum( .x)), 
-                            weight = sum(weight), exp_factor = sum(exp_factor_)) %>%
-          dplyr::mutate( across(ends_with( "Total" ),
-                                ~ .x/exp_factor))
-      
-        n_names = names(cluster.results[[i]])
-        n_names = str_replace(n_names, ".Total", "")
-        names(cluster.results[[i]]) = n_names
-        rm(n_names)
+          clusterVariables= str_replace(resultVariables, "_ha.Total", "")
+          cluster.results[[i]] <- df_base_unit %>% 
+            dplyr::group_by( across( all_of( cluster_UUID_ )))  %>%
+            dplyr::summarize( across( .cols= all_of( ends_with(".Total")) & starts_with(clusterVariables), ~sum( .x)), 
+                              weight = sum(weight), exp_factor = sum(exp_factor_)) %>%
+            dplyr::mutate( across(ends_with( "Total" ),
+                                  ~ .x/exp_factor))
+          
+          n_names = names(cluster.results[[i]])
+          n_names = str_replace(n_names, "_ha.Total", "")
+          names(cluster.results[[i]]) = n_names
+          rm(n_names)
       }
         
       rm(resultVariables)
@@ -1102,6 +1103,7 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
     if ( cluster_UUID_ != "" & !arena.chainSummary$analysis$clusteringVariances ) {
       
       ids_2_survey          <- NULL
+      
       dimension_names       <- dimension_names[ !stringr::str_detect( dimension_names, pattern = base_UUID_) ] # remove a list element
       cat_names_uuid        <- cat_names_uuid[  !stringr::str_detect( cat_names_uuid,  pattern = base_UUID_) ]
 
@@ -1564,6 +1566,10 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
            })
   if ( exists("out_global_mean")) rm(out_global_mean)
   
+  rm(out_mean); rm(out_total); rm(out_global_mean); rm(out_global_total)
+  rm( out_mean_num ); rm( out_mean_chr )
+  
+  
   if ( arena.analyze$stratification | arena.analyze$post_stratification ) {
     tryCatch({if (exists('user_file_path') & exists("var_efficiency")) write.csv( var_efficiency, out_file[[4]], row.names = F)},
              warning = function( w ) { cat("No output - var_efficiency") },
@@ -1624,7 +1630,7 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
     
     if ( cluster_UUID_ !="" ) {
       outfile8            <- paste0( out_path, result_entities[[i]], "_cluster_results.csv")
-      cluster.results_out <- cluster.results[[i]] %>% as.data.frame() %>% select(-ends_with(".Total"))
+      cluster.results_out <- cluster.results[i] %>% as.data.frame() %>% select(-ends_with(".Total"))
       cluster.results_out <- df_base_unit %>% dplyr::select( all_of( cluster_UUID_), all_of( arena.chainSummary$clusteringEntityKeys )) %>%
         unique() %>%
         dplyr::left_join( cluster.results_out, by = cluster_UUID_) %>%

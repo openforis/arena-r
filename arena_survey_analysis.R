@@ -1230,7 +1230,7 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
       
       df_analysis_combined <- df_analysis_combined                     %>%  
         unite(., CLUSTERCOL,  c( all_of( cluster_UUID_), all_of( arena.analyze$dimensions)), sep = "--", remove = FALSE) %>%
-        dplyr::left_join( df_analysis_weights, by = "CLUSTERCOL") %>%
+        dplyr::left_join( df_analysis_weights %>% select(CLUSTERCOL, weight, exp_factor_), by = "CLUSTERCOL") %>%
         dplyr::select(-CLUSTERCOL)
       
     } else {
@@ -1567,7 +1567,7 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
   if ( exists("out_global_mean")) rm(out_global_mean)
   
   rm(out_mean); rm(out_total); rm(out_global_mean); rm(out_global_total)
-  rm( out_mean_num ); rm( out_mean_chr )
+  
   
   
   if ( arena.analyze$stratification | arena.analyze$post_stratification ) {

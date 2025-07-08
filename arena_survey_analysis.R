@@ -1200,9 +1200,9 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
                                 .names = "{.col}") )                             %>%
       data.frame()
     
-    if (all( arena.analyze$dimensions_at_baseunit)) {
+    if (all( arena.analyze$dimensions_at_baseunit) & !( cluster_UUID_ != "" & !arena.chainSummary$analysis$clusteringVariances )) {
 
-      df_analysis_combined<- df_base_unit         %>%
+      df_analysis_combined <- df_base_unit         %>%
         data.frame()                              %>%
         dplyr::filter( weight > 0 )               %>%
         select(all_of( cat_names_uuid), all_of( arena.analyze$dimensions), all_of(cat_names_num)) %>%
@@ -1564,9 +1564,10 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
            warning = function( w ) { cat("No output - out_global_mean") },
            error   = function( e ) { cat("No output - out_global_mean")
            })
-  if ( exists("out_global_mean")) rm(out_global_mean)
   
-  rm(out_mean); rm(out_total); rm(out_global_mean); rm(out_global_total)
+  if ( exists("out_global_mean"))  rm(out_global_mean)
+  if ( exists("out_global_total")) rm(out_global_total)
+  rm(out_mean); rm(out_total)
   
   
   

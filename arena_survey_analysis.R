@@ -789,33 +789,16 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
           join_col <- df_base_unit %>% select(all_of(base_UUID_), all_of(arena.chainSummary$baseUnitEntityKeys[keys_to_add])) %>%
             dplyr::mutate( across( where( is.numeric), ~as.character(.))) %>% distinct()
           
-          out_file_data <- result_cat[[i]] %>% left_join(join_col, by = base_UUID_) 
+          out_file_olap_data <- result_cat[[i]] %>% left_join(join_col, by = base_UUID_) 
         } else {
-          out_file_data <- result_cat[[i]]
+          out_file_olap_data <- result_cat[[i]]
         }
         
         # Keep only TOTALS
-        out_file_data        <- out_file_data %>% select( -ends_with(".Mean"))
-        data_names           <- names( out_file_data)
-        names(out_file_data) <- gsub( "_ha.Total", "", data_names) 
-        
-        # data_names           <- names( out_file_data)
-        
-        # notbase_unit_cat_attributes <- data_names[ !result_cat_attributes[[i]] %in% names(df_base_unit)]
-        # data_names[ data_names %in% notbase_unit_cat_attributes] <- paste0("NOTBASE_", data_names[data_names %in% notbase_unit_cat_attributes]) 
-        # names( out_file_data) <- data_names
-        # rm( notbase_unit_cat_attributes)
-        # 
-        rm( data_names)
-        
-        # M7. Write OLAP table into CSV -------------------------------------------
+        out_file_olap_data        <- out_file_olap_data %>% select( -ends_with(".Mean"))
+        data_names                <- names( out_file_olap_data)
+        names(out_file_olap_data) <- gsub( "_ha.Total", "", data_names) 
 
-        out_file_name <- paste0(user_file_path, "OLAP/OLAP_", result_entities[i], ".csv")
-        tryCatch({if (exists('user_file_path'))  write.csv(out_file_data, out_file_name,  row.names = F)},
-                 warning = function( w ) { cat("No output - OLAP data") },
-                 error   = function( e ) { cat("No output - OLAP data")
-                 })
-        rm( keys_to_add ); rm( out_file_data ); rm( out_file_name )
       }      
 
       # M8. Per hectare results at base unit level (out) --------
@@ -834,9 +817,39 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
       
       # join results with the clone of base unit
       df_base_unit <- df_base_unit %>%
-        dplyr::left_join( base_unit.results[[i]], by = base_UUID_)
+        dplyr::left_join( base_unit.results[[i]] %>% select(-item_count), by = base_UUID_)
       
-
+      # M7b. Add plot totals into the OLAP table -------------------------------------------
+      
+      if (exists('out_file_olap_data')) {
+        olap_file_names           <- names( out_file_olap_data)
+        
+        base_unit_attribute_names <- olap_file_names[ result_cat_attributes[[i]] %in% names(df_base_unit)]
+        olap_base_unit_totals     <- df_base_unit %>% select( any_of(base_unit_attribute_names)) %>% 
+          left_join(base_unit.results[[i]] %>% select(all_of(base_UUID_), any_of(ends_with(".Total")), entity_count_ = item_count) , by = base_UUID_ )
+        
+        data_names <- names(olap_base_unit_totals)
+        names( olap_base_unit_totals) <- gsub( "_ha.Total", "", data_names) 
+        out_file_olap_data$OLAP_baseunit_total    <- FALSE
+        olap_base_unit_totals$OLAP_baseunit_total <- TRUE
+        out_file_olap_data <- dplyr::bind_rows( out_file_olap_data, olap_base_unit_totals)
+        out_file_olap_data[ is.na(out_file_olap_data )] <- ""
+        
+        rm( base_unit_attribute_names); rm( olap_file_names) 
+        rm( data_names); rm (olap_base_unit_totals)
+        
+        # M7. Write OLAP table into CSV -------------------------------------------
+        
+        out_file_name <- paste0(user_file_path, "OLAP/OLAP_", result_entities[i], ".csv")
+        tryCatch({if (exists('user_file_path'))  write.csv(out_file_olap_data, out_file_name,  row.names = F)},
+                 warning = function( w ) { cat("No output - OLAP data") },
+                 error   = function( e ) { cat("No output - OLAP data")
+                 })
+        rm( keys_to_add ); rm( out_file_olap_data ); rm( out_file_name )
+      }
+      
+      
+      
       # M9. Per hectare results at cluster level (out)  -------------------------
       
       ## compute sum of per hectare results at the cluster level for each result variable

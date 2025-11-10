@@ -875,7 +875,19 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
     
     names(result_cat) <- result_entities    
     
-  
+    # create OLAP zip file for ARENA Shiny Reporter
+    # The new Shiny application will be launced 2026
+    if ( dir.exists( './user_output/OLAP')) {
+      # with categories, taxonomies, chainSummary, SchemaSummary
+      write.csv( arena.schemaSummary, "./user_output/OLAP/SchemaSummary.csv", row.names = F)
+      if ( exists( 'categories')) saveRDS( categories, "./user_output/OLAP/categories.rds")
+      if ( exists( 'taxonomies')) saveRDS( taxonomies, "./user_output/OLAP/taxonomies.rds")
+      files_to_zip                             <- list.files("./user_output/OLAP", full.names = TRUE)
+      files_to_zip[ length( files_to_zip) + 1] <- "./chain_summary.json"
+      
+      f_name <- paste0('./user_output/OLAP_Shiny_(', arena.chainSummary$surveyName, ').zip')
+      zip::zipr( f_name, files_to_zip)
+    }   
   
 # ******************************************************************* -----
 # 2. SAMPLING STRATEGIES AND RELIABILITY ----------------------------------

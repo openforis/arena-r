@@ -743,13 +743,16 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
 
         # M4. Total (and mean) for each category & boolean & taxon combination at base unit level --------
 
+        result_cat[[i]]$entity_count_                          <- 0
+        result_cat[[i]]$entity_count_[1 : nrow(df_entitydata)] <- 1
+        
         result_cat[[i]] <- result_cat[[i]]                             %>%
           dplyr::right_join( df_base_unit %>% select( all_of( base_UUID_), exp_factor_), by = base_UUID_ ) %>% # join expansion factor
           dplyr::group_by(  across( result_cat_attributes[[i]] ))      %>%
           dplyr::summarize( across(.cols= all_of(resultVariables), 
                                    list( Total = ~sum(exp_factor_ * .x, na.rm = TRUE), Mean = ~sum(.x, na.rm = TRUE) ),  
                                    .names = "{.col}.{.fn}"), 
-                            entity_count_ = n() )                      %>%
+                            entity_count_ = sum(entity_count_) )       %>%
           data.frame() 
         
       } else { # entity is the base unit
@@ -812,7 +815,7 @@ arenaAnalytics <- function( dimension_list_arg, server_report_step ) {
                                   list( Total = ~sum( exp_factor_ * .x, na.rm = TRUE), Mean = ~sum( .x, na.rm = TRUE) ),
                                   .names = "{.col}.{.fn}"),
                           item_count = n() ) %>%
-        dplyr::mutate(item_count = ifelse(if_all(paste0( resultVariables, ".Total") , ~ .x == 0), 0, item_count))
+        dplyr::mutate( item_count = ifelse( if_all(paste0( resultVariables, ".Total") , ~ .x == 0), 0, item_count))
       
       
       # join results with the clone of base unit

@@ -1,13 +1,15 @@
 # #######################################################################*
 #
-# The function 'arenaAnalytics_Widetable' is used to compute estimates for base units and clusters, 
-# and a Wide Table for Arena Shiny tool
+# The function 'arenaAnalytics_LowAggData' is used to compute estimates for base units and clusters, 
+# at the lowest aggregate level.
 #
-# This function can be called in the Arena's data processing chain
+# This function can be called in the Arena's data processing chain.
 # 
-# The script createsa list of data frames for statistical analysis called 'result_cat' 
-# This object contains "totals" and area, at the base unit level for all area-based (active) variables, 
-# across all categorical, taxonomic and boolean attributes, listed by entities.   
+# The script creates a list of data frames for statistical analysis called 'result_cat'.
+# From those tables one can aggregate and filter all the data to the level needed for the statistical analysis.
+# This table contains "totals" and areas, at the base unit level for all area-based (active) variables, 
+# across all categorical, taxonomic and boolean attributes, by entities.
+#
 # Note: reported result entities' names we can get as follows: names(result_cat)
 #
 # Required R packages (with dependencies): dplyr, stringr, rlang
@@ -117,8 +119,16 @@ arenaAnalytics_LowAggData <- function( server_report_step ) {
     if (length(f)) file.remove(f)
     rm(f)
     
-
-# E. Read base unit data and parameters--------------------------------------------------
+# E1. Join entity table 'arena_join'  --------------------------------------    
+    if (!is.null( categories$arena_join)) {
+#      source( "C:/Users/User/Documents/0 R and Shiny/arena-r/arena_join_entitytable.R")
+      source( "https://raw.githubusercontent.com/openforis/r-arena/master/arena_join_entitytable.R")
+      join_msg <- join_entity(  )
+      print( join_msg)
+      rm( join_msg)
+    }
+  
+# E2. Read base unit data and parameters--------------------------------------------------
 
     # get base unit data into a data frame
     df_base_unit                   <- get( arena.chainSummary$baseUnit )
@@ -415,12 +425,11 @@ arenaAnalytics_LowAggData <- function( server_report_step ) {
     
     # ADD area estimates based on exp_factor
     
-
-# M1. Loop across result entities [i] --------------------------------------
+    # M1. Loop across result entities [i] --------------------------------------
 
     # Quantitative result variables against categorical and taxonomic data
     for ( i in (1:length(result_entities))) {
-      
+
       # PART 1.compute sums (per AOIs) and means (/ha) across all categorical variables 
       # drop out columns where all data is NA.  https://stackoverflow.com/questions/2643939/remove-columns-from-dataframe-where-all-values-are-na
       

@@ -426,7 +426,7 @@ arenaAnalytics_LowAggData <- function( server_report_step ) {
     # ADD area estimates based on exp_factor
     
     # M1. Loop across result entities [i] --------------------------------------
-
+    
     # Quantitative result variables against categorical and taxonomic data
     for ( i in (1:length(result_entities))) {
 
@@ -543,6 +543,17 @@ arenaAnalytics_LowAggData <- function( server_report_step ) {
           data.frame()
       }
       
+      # M0. Collect information about reporting Dimensions and entity
+      if (i == 1) {
+        df_ResultDimensions        = data.frame( dimension = result_cat_attributes[[i]])
+        df_ResultDimensions$entity = result_entities[i]
+      } else {
+        df_Temp        = data.frame( dimension = result_cat_attributes[[i]])
+        df_Temp$entity = result_entities[i]
+        df_ResultDimensions <- rbind( df_ResultDimensions, df_Temp)
+        rm( df_Temp)
+      }
+      
       # M5. Finalize OLAP table -------------------------------------------------
 
       # add weight, exp_factor_; AND IF EXISTS: cluster_UUID_, arena.analyze$strat_attribute (This is actually already in dataframe because it is categorical!) 
@@ -656,11 +667,17 @@ arenaAnalytics_LowAggData <- function( server_report_step ) {
     names(result_cat) <- result_entities 
     print( names(result_cat))
     
+    
     # create OLAP zip file for ARENA Shiny Reporter
-    # The new Shiny application will be launced 2026
+    # The new Shiny application will be launched 2026
     if ( dir.exists( './user_output/OLAP')) {
       # with categories, taxonomies, chainSummary, SchemaSummary
       write.csv( arena.schemaSummary, "./user_output/OLAP/SchemaSummary.csv", row.names = F)
+      
+      df_ResultDimensions <- df_ResultDimensions[,c(2, 1)] # swap column order
+      df_ResultDimensions <- subset( df_ResultDimensions, !endsWith( dimension, "_uuid" ))
+      write.csv( df_ResultDimensions, "./user_output/OLAP/ReportDimensions.csv", row.names = F)
+      
       if ( exists( 'categories')) saveRDS( categories, "./user_output/OLAP/categories.rds")
       if ( exists( 'taxonomies')) saveRDS( taxonomies, "./user_output/OLAP/taxonomies.rds")
       files_to_zip                             <- list.files("./user_output/OLAP", full.names = TRUE)

@@ -1,13 +1,24 @@
 
-
-
-#########################################################
-# This function function reads an Arena category table 'arena_join' and uses it to join
-# selected attributes to selected entities. This method can be used in cases where
-# survey hierarchy is incomplete, and some base unit level attributes have to read
-# from another entity, that is at the same level as 'tree', 'sapling', etc.
+##########################################################################################################################################
+# Lauri Vesa, FAO Forestry Division
+# 3/2026
+##########################################################################################################################################
+# This function function reads the category table 'arena_join' and uses it to join
+# selected attributes to selected entities. This method can be used in cases where the point‑sampling theory is followed. 
+# In this case, in an Arena survey, 'plot_section' or 'stand' is at the same level at the hierarchy with 'tree', 'sapling', etc.
 # A typical use case is a rather small-area sample plot, which can be split into stands
-# and the first stand in the table is regarded presenting the sampled point.
+# and the stand_id '1' (or 'A') in the table is regarded presenting the sampled point.
+
+# The rationale is well‑established in point‑sampling theory, design‑based inference, and standard NFI sampling practice, 
+# all of which appear e.g. in published literature that Finland NFI by Luke relies on. 
+# The basic principle is the following: Each plot represents a point, not an area. In large-area forest inventory, 
+# the statistical estimation is design-based, meaning: 
+#  1) The sample point is the observation unit, and 
+#  2) the plot is only a device for measuring attributes around that point.
+
+# Although a circular plot may overlap e.g. multiple land use/cover classes, the centre‑point rule ensures unbiased estimates 
+# because plot centres are selected randomly or systematically, and the overlap with boundaries is random. 
+# This approach maintains consistency, minimizes classification errors, and avoids artificial subdivision of the sampling unit.
 
 join_entity <- function( ) {  
   
@@ -21,8 +32,7 @@ join_entity <- function( ) {
     select( attribute_arena)                    %>%
     pull()
   
-  source.attributes = c( source.attributes, paste(source.attributes,"label",sep="_"), paste(source.attributes,"scientific_name",sep="_"))
-  
+  source.attributes = c( source.attributes, paste(source.attributes,"label", sep="_"), paste(source.attributes, "scientific_name", sep="_"))
   
   link_value          <- categories$arena_join$link_value[1]
   df_source           <- get( source.entity)                      %>% 
@@ -37,7 +47,6 @@ join_entity <- function( ) {
     filter( !is.na(entity) & entity != "") %>%
     select( entity)                        %>% 
     pull()
-  # print( target.entities)
   
   # join base unit data first:
   df_base_unit <- df_base_unit %>% left_join( df_source, by = base_UUID_)
@@ -51,15 +60,9 @@ join_entity <- function( ) {
       df_target$join_field_ <- df_target[[base_UUID_]]
       df_target[base_UUID_] <- NULL
       
-      target.attribute <- categories$arena_join %>% 
-        filter( entity == target.entities[i])   %>%
-        select( attribute_arena)                %>% 
-        pull()
-  
-      s_SQL  <- paste0('SELECT df_target.*, df_source.* FROM df_target LEFT JOIN df_source ON df_target.', 
-                     target.attribute, ' = ', source.attribute, 
-                     ' AND df_target.join_field_ = df_source.', base_UUID_)
-
+      s_SQL  <- paste0('SELECT df_target.*, df_source.* FROM df_target LEFT JOIN df_source ON', 
+                       ' df_target.join_field_ = df_source.', base_UUID_)
+      
       df_target             <- sqldf( s_SQL )
       df_target$join_field_ <- NULL
       assign( target.entities[i], df_target, env = .GlobalEnv)
@@ -68,5 +71,3 @@ join_entity <- function( ) {
   } # for i
   return( tMessage)
 } # join_entity
-
-

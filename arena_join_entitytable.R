@@ -3,10 +3,10 @@
 # Lauri Vesa, FAO Forestry Division
 # 3/2026
 ##########################################################################################################################################
-# This function function reads the category table 'arena_join' and uses it to join
+# This function reads the category table 'arena_join' and uses it to join
 # selected attributes to selected entities. This method can be used in cases where the point‑sampling theory is followed. 
-# In this case, in an Arena survey, 'plot_section' or 'stand' is at the same level at the hierarchy with 'tree', 'sapling', etc.
-# A typical use case is a rather small-area sample plot, which can be split into stands
+# In this case, in an Arena survey, 'plot_section' or 'stand' is at the same level at the hierarchy as 'tree', 'sapling', etc.
+# A typical case of use is a rather small-area sample plot, which can be split into stands
 # and the stand_id '1' (or 'A') in the table is regarded presenting the sampled point.
 
 # The rationale is well‑established in point‑sampling theory, design‑based inference, and standard NFI sampling practice, 

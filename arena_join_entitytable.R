@@ -56,7 +56,7 @@ join_entity <- function( ) {
   for (i in 1:length( target.entities)) {
     if ( exists( target.entities[i])) {
       df_target        <- get(target.entities[i])
-      # create a temporary base unit ID, needed to avoid duplicate names in output joined table
+      # create a temporary base unit ID, used to avoid duplicate names in output joined table
       df_target$join_field_ <- df_target[[base_UUID_]]
       df_target[base_UUID_] <- NULL
       

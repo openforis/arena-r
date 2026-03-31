@@ -1,23 +1,26 @@
 # #######################################################################*
 #
-# The function 'arenaAnalytics_LowAggData' is used to compute estimates for base units and clusters, 
-# at the lowest aggregate level.
+# The main function 'arenaAnalytics_LowAggData' is used to compute estimates for base units and clusters, 
+# at the lowest aggregate level. We call the output files as Minimum Area Unit (MAU) tables.
+# These tables are computed for all entities in the chain which contain active area-based variables.
 #
-# This function can be called in the Arena's data processing chain.
+# The function 'arenaAnalytics_LowAggData()' is called in the Arena's data processing chain ('statistical-analysis.R').
 # 
-# The script creates a list of data frames for statistical analysis called 'result_cat'.
-# From those tables one can aggregate and filter all the data to the level needed for the statistical analysis.
-# This table contains "totals" and areas, at the base unit level for all area-based (active) variables, 
-# across all categorical, taxonomic and boolean attributes, by entities.
+# Internally, the script creates a list of data frames for statistical analysis (as 'result_cat' in the script).
+# From these tables one can aggregate and filter all the data needed for the statistical analysis.
+# The analysis are run with the help of the Arena Reporter Shiny app.
 #
-# Note: reported result entities' names we can get as follows: names(result_cat)
+# A MAU table contains "totals" and areas, at the base unit level for all area-based (active) variables, 
+# across all categorical, taxonomic and Boolean attributes, by entities (such as 'tree','bamboo', etc.).
 #
-# Required R packages (with dependencies): dplyr, stringr, rlang
+#
+# Required R packages (with dependencies): dplyr, stringr, rlang, pacman, tidyr (>= 1.3.0)
 #
 # Created by:   Lauri Vesa, FAO
+#               Gael Sola, FAO
 #               Javier Garcia Perez, FAO
 #               Anibal Cuchietti, FAO
-#               Jimena Saucedo Miranda (FAO)
+#               Jimena Saucedo Miranda, FAO
 #
 #######################################################################*
 
@@ -55,16 +58,16 @@ conversion_HierarchicalCodeAttributes <- function( df_data, arena.chainSummary )
   if ( is.null( df_data ))  return( df_data )
   if ( nrow( df_data ) == 0 | is.null( arena.chainSummary$categoryAttributeAncestors )) return( df_data )
   if ( length( arena.chainSummary$categoryAttributeAncestors$attribute ) == 0)          return( df_data )
-  categoryNames = unique(arena.chainSummary$categoryAttributeAncestors$categoryName)
+  categoryNames <- unique(arena.chainSummary$categoryAttributeAncestors$categoryName)
   
   for (j in 1: length(categoryNames)) {
-    cat_table <- arena.chainSummary$categoryAttributeAncestors %>% filter(categoryName==categoryNames[j]) %>%
+    cat_table <- arena.chainSummary$categoryAttributeAncestors %>% filter(categoryName == categoryNames[j]) %>%
       arrange( categoryLevel)
     for ( i in 1 : length( cat_table$attribute )) {
       if ( cat_table$attribute[[i]] %in% names( df_data )) {
         varname <- cat_table$attribute[[i]]
         df_data <- df_data %>%
-          unite( !!varname, any_of( c( cat_table$ancestors[[i]][i], varname )), sep = "*", remove=FALSE ) 
+          unite( !!varname, any_of( c( cat_table$ancestors[[i]][i], varname )), sep = "*", remove = FALSE ) 
       }
     }}
   return( df_data )
@@ -75,7 +78,7 @@ conversion_HierarchicalCodeAttributes <- function( df_data, arena.chainSummary )
 
 # MAIN PROGRAM
 
-arenaAnalytics_LowAggData <- function( server_report_step ) {
+arenaAnalytics_LowAggData <- function() {
   
   usePackage('pacman')
   # require v. 1.3.0 or newer
@@ -85,10 +88,6 @@ arenaAnalytics_LowAggData <- function( server_report_step ) {
   )
   
   usePackage('tidyr')
-  
-  if (!exists( "server_report_step" ))    server_report_step <- "last"
-  if (is_missing( server_report_step ))   server_report_step <- "last"
-
 
   # B. Read json data -------------------------------------------------------
 
@@ -123,7 +122,7 @@ arenaAnalytics_LowAggData <- function( server_report_step ) {
     if (!is.null( categories$arena_join)) {
 #      source( "C:/Users/User/Documents/0 R and Shiny/arena-r/arena_join_entitytable.R")
       source( "https://raw.githubusercontent.com/openforis/r-arena/master/arena_join_entitytable.R")
-      join_msg <- join_entity(  )
+      join_msg <- join_entity( TRUE )
       print( join_msg)
       rm( join_msg)
     }
@@ -283,7 +282,7 @@ arenaAnalytics_LowAggData <- function( server_report_step ) {
       
     } else if (cluster_UUID_ != "" & arena.chainSummary$analysis$nonResponseBiasCorrection & !arena.chainSummary$analysis$clusteringVariances) {
       # non-stratified cluster sampling with non-response bias correction (for missing samples in clusters)
-      ssu_max = max( df_base_unit$cluster_count_ )
+      ssu_max                           <- max( df_base_unit$cluster_count_ )
       df_base_unit$arena_ssu_correction <- ifelse( ssu_max > 0 & df_base_unit$sum_weight_ > 0, ( ssu_max / df_base_unit$cluster_count_ ) , 1 )
     }
     
@@ -545,16 +544,16 @@ arenaAnalytics_LowAggData <- function( server_report_step ) {
       
       # M0. Collect information about reporting Dimensions and entity
       if (i == 1) {
-        df_ResultDimensions        = data.frame( dimension = result_cat_attributes[[i]])
-        df_ResultDimensions$entity = result_entities[i]
+        df_ResultDimensions        <- data.frame( dimension = result_cat_attributes[[i]])
+        df_ResultDimensions$entity <- result_entities[i]
       } else {
-        df_Temp        = data.frame( dimension = result_cat_attributes[[i]])
-        df_Temp$entity = result_entities[i]
+        df_Temp             <- data.frame( dimension = result_cat_attributes[[i]])
+        df_Temp$entity      <- result_entities[i]
         df_ResultDimensions <- rbind( df_ResultDimensions, df_Temp)
         rm( df_Temp)
       }
       
-      # M5. Finalize OLAP table -------------------------------------------------
+      # M5. Finalize Minimum Area Unit (MAU) table -------------------------------------------------
 
       # add weight, exp_factor_; AND IF EXISTS: cluster_UUID_, arena.analyze$strat_attribute (This is actually already in dataframe because it is categorical!) 
       temp_list_variables <- c(base_UUID_, "weight", "exp_factor_")
@@ -567,12 +566,12 @@ arenaAnalytics_LowAggData <- function( server_report_step ) {
       rm( temp_list_variables )
       
 
-      # M6. OLAP: Compute per hectare results at base unit level for res. variables  --------
+      # M6. MAU: Compute per hectare results at base unit level for res. variables  --------
       
       # Note: above-computed (M4) Means are not used!
-      ## get results at the base unit level for each result variable for OLAP
+      ## get results at the base unit level for each result variable for MAU
       if (result_entities[[i]] != arena.chainSummary$baseUnit) {
-        out_path  <- "OLAP/"
+        out_path  <- "MAU/"
         dir.create( paste0( user_file_path, out_path ), showWarnings = FALSE )
         
         keys_to_add <- which( !(arena.chainSummary$baseUnitEntityKeys %in% names(result_cat[[i]])))
@@ -580,15 +579,15 @@ arenaAnalytics_LowAggData <- function( server_report_step ) {
           join_col <- df_base_unit %>% select(all_of(base_UUID_), all_of(arena.chainSummary$baseUnitEntityKeys[keys_to_add])) %>%
             dplyr::mutate( across( where( is.numeric), ~as.character(.))) %>% distinct()
           
-          out_file_olap_data <- result_cat[[i]] %>% left_join(join_col, by = base_UUID_) 
+          out_file_mau_data <- result_cat[[i]] %>% left_join(join_col, by = base_UUID_) 
         } else {
-          out_file_olap_data <- result_cat[[i]]
+          out_file_mau_data <- result_cat[[i]]
         }
         
         # Keep only TOTALS
-        out_file_olap_data        <- out_file_olap_data %>% select( -ends_with(".Mean"))
-        data_names                <- names( out_file_olap_data)
-        names(out_file_olap_data) <- gsub( "_ha.Total", "", data_names) 
+        out_file_mau_data         <- out_file_mau_data %>% select( -ends_with(".Mean"))
+        data_names                <- names( out_file_mau_data)
+        names(out_file_mau_data)  <- gsub( "_ha.Total", "", data_names) 
 
       }      
 
@@ -599,7 +598,7 @@ arenaAnalytics_LowAggData <- function( server_report_step ) {
         # Add expansion factor for all result entities
         dplyr::right_join(( df_base_unit %>% select( all_of( base_UUID_), weight, exp_factor_)), by = base_UUID_) %>%
         dplyr::group_by( across( all_of(base_UUID_ ))) %>%
-        dplyr::summarize( across( .cols= all_of( resultVariables),
+        dplyr::summarize( across( .cols = all_of( resultVariables),
                                   list( Total = ~sum( exp_factor_ * .x, na.rm = TRUE), Mean = ~sum( .x, na.rm = TRUE) ),
                                   .names = "{.col}.{.fn}"),
                           item_count = n() ) %>%
@@ -610,33 +609,33 @@ arenaAnalytics_LowAggData <- function( server_report_step ) {
       df_base_unit <- df_base_unit %>%
         dplyr::left_join( base_unit.results[[i]] %>% select(-item_count), by = base_UUID_)
       
-      # M7b. Add plot totals into the OLAP table -------------------------------------------
+      # M7b. Add plot totals into the MAU table -------------------------------------------
       
-      if (exists('out_file_olap_data')) {
-        olap_file_names           <- names( out_file_olap_data)
+      if (exists('out_file_mau_data')) {
+        mau_file_names           <- names( out_file_mau_data)
         
-        base_unit_attribute_names <- olap_file_names[ result_cat_attributes[[i]] %in% names(df_base_unit)]
-        olap_base_unit_totals     <- df_base_unit %>% select( any_of(base_unit_attribute_names)) %>% 
+        base_unit_attribute_names <- mau_file_names[ result_cat_attributes[[i]] %in% names(df_base_unit)]
+        mau_base_unit_totals      <- df_base_unit %>% select( any_of(base_unit_attribute_names)) %>% 
           left_join(base_unit.results[[i]] %>% select(all_of(base_UUID_), any_of(ends_with(".Total")), entity_count_ = item_count) , by = base_UUID_ )
         
-        data_names <- names(olap_base_unit_totals)
-        names( olap_base_unit_totals) <- gsub( "_ha.Total", "", data_names) 
-        out_file_olap_data$OLAP_baseunit_total    <- FALSE
-        olap_base_unit_totals$OLAP_baseunit_total <- TRUE
-        out_file_olap_data <- dplyr::bind_rows( out_file_olap_data, olap_base_unit_totals)
-        out_file_olap_data[ is.na(out_file_olap_data )] <- ""
+        data_names <- names(mau_base_unit_totals)
+        names( mau_base_unit_totals)                  <- gsub( "_ha.Total", "", data_names) 
+        out_file_mau_data$mau_baseunit_total          <- FALSE
+        mau_base_unit_totals$mau_baseunit_total       <- TRUE
+        out_file_mau_data                             <- dplyr::bind_rows( out_file_mau_data, mau_base_unit_totals)
+        out_file_mau_data[ is.na(out_file_mau_data )] <- ""
         
-        rm( base_unit_attribute_names); rm( olap_file_names) 
-        rm( data_names); rm (olap_base_unit_totals)
+        rm( base_unit_attribute_names); rm( mau_file_names) 
+        rm( data_names); rm (mau_base_unit_totals)
         
-        # M7. Write OLAP table into CSV -------------------------------------------
+        # M7. Write MAU table into CSV -------------------------------------------
         
-        out_file_name <- paste0(user_file_path, "OLAP/OLAP_", result_entities[i], ".csv")
-        tryCatch({if (exists('user_file_path'))  write.csv(out_file_olap_data, out_file_name,  row.names = F)},
-                 warning = function( w ) { cat("No output - OLAP data") },
-                 error   = function( e ) { cat("No output - OLAP data")
+        out_file_name <- paste0(user_file_path, "MAU/MAU_", result_entities[i], ".csv")
+        tryCatch({if (exists('user_file_path'))  write.csv(out_file_mau_data, out_file_name,  row.names = F)},
+                 warning = function( w ) { cat("No output - Minimum Area Unit (MAU) data") },
+                 error   = function( e ) { cat("No output - Minimum Area Unit (MAU) data")
                  })
-        rm( keys_to_add ); rm( out_file_olap_data ); rm( out_file_name )
+        rm( keys_to_add ); rm( out_file_mau_data ); rm( out_file_name )
       }
       
       
@@ -647,7 +646,7 @@ arenaAnalytics_LowAggData <- function( server_report_step ) {
       
       if ( cluster_UUID_ != "" ) {
         
-          clusterVariables= str_replace(resultVariables, "_ha.Total", "")
+          clusterVariables     <- str_replace(resultVariables, "_ha.Total", "")
           cluster.results[[i]] <- df_base_unit %>% 
             dplyr::group_by( across( all_of( cluster_UUID_ )))  %>%
             dplyr::summarize( across( .cols= all_of( ends_with(".Total")) & starts_with(clusterVariables), ~sum( .x)), 
@@ -655,9 +654,9 @@ arenaAnalytics_LowAggData <- function( server_report_step ) {
             dplyr::mutate( across(ends_with( "Total" ),
                                   ~ .x/exp_factor))
           
-          n_names = names(cluster.results[[i]])
-          n_names = str_replace(n_names, "_ha.Total", "")
-          names(cluster.results[[i]]) = n_names
+          n_names                     <- names(cluster.results[[i]])
+          n_names                     <- str_replace(n_names, "_ha.Total", "")
+          names(cluster.results[[i]]) <- n_names
           rm(n_names)
       }
         
@@ -668,22 +667,22 @@ arenaAnalytics_LowAggData <- function( server_report_step ) {
     print( names(result_cat))
     
     
-    # create OLAP zip file for ARENA Shiny Reporter
+    # create Minimum Area Unit (MAU) table zip file for ARENA Shiny Reporter
     # The new Shiny application will be launched 2026
-    if ( dir.exists( './user_output/OLAP')) {
+    if ( dir.exists( './user_output/MAU')) {
       # with categories, taxonomies, chainSummary, SchemaSummary
-      write.csv( arena.schemaSummary, "./user_output/OLAP/SchemaSummary.csv", row.names = F)
+      write.csv( arena.schemaSummary, "./user_output/MAU/SchemaSummary.csv", row.names = F)
       
       df_ResultDimensions <- df_ResultDimensions[,c(2, 1)] # swap column order
       df_ResultDimensions <- subset( df_ResultDimensions, !endsWith( dimension, "_uuid" ))
-      write.csv( df_ResultDimensions, "./user_output/OLAP/ReportDimensions.csv", row.names = F)
+      write.csv( df_ResultDimensions, "./user_output/MAU/ReportDimensions.csv", row.names = F)
       
-      if ( exists( 'categories')) saveRDS( categories, "./user_output/OLAP/categories.rds")
-      if ( exists( 'taxonomies')) saveRDS( taxonomies, "./user_output/OLAP/taxonomies.rds")
-      files_to_zip                             <- list.files("./user_output/OLAP", full.names = TRUE)
+      if ( exists( 'categories')) saveRDS( categories, "./user_output/MAU/categories.rds")
+      if ( exists( 'taxonomies')) saveRDS( taxonomies, "./user_output/MAU/taxonomies.rds")
+      files_to_zip                             <- list.files("./user_output/MAU", full.names = TRUE)
       files_to_zip[ length( files_to_zip) + 1] <- "./chain_summary.json"
       
-      f_name <- paste0('./user_output/OLAP_Shiny_(', arena.chainSummary$surveyName, ').zip')
+      f_name <- paste0('./user_output/MAU_Shiny_(', arena.chainSummary$surveyName, ').zip')
       zip::zipr( f_name, files_to_zip)
     }   
   
@@ -725,10 +724,10 @@ arenaAnalytics_LowAggData <- function( server_report_step ) {
       }
     }
     
-    base_unit.results_out <- df_base_unit %>% select( all_of( base_UUID_), all_of( dimension_names ), weight, exp_factor=exp_factor_) %>%
+    base_unit.results_out <- df_base_unit %>% select( all_of( base_UUID_), all_of( dimension_names ), weight, exp_factor = exp_factor_) %>%
       dplyr::left_join( base_unit.results_out, by = base_UUID_) %>%
       dplyr::select( -all_of( base_UUID_)) %>%
-      mutate(item_count = ifelse(weight == 0, 0, item_count))
+      mutate( item_count = ifelse(weight == 0, 0, item_count))
     
     tryCatch({if (exists('user_file_path')) write.csv( base_unit.results_out, outfile7, row.names = F)},
              warning = function( w ) { cat("No output - base unit results") },
@@ -752,7 +751,8 @@ arenaAnalytics_LowAggData <- function( server_report_step ) {
     }
     
   }
-  if ( Sys.getenv("RSTUDIO_PROGRAM_MODE") == "server" & exists('user_file_path')  & server_report_step == "last") { 
+  
+  if ( Sys.getenv("RSTUDIO_PROGRAM_MODE") == "server" & exists('user_file_path')) { 
     # zip all files
     export_filename  <- paste0( user_file_path, 'arena_results_(', arena.chainSummary$surveyName, ').zip')
     files2zip        <- dir( user_file_path, full.names = TRUE )

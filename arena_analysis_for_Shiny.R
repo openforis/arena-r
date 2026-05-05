@@ -35,15 +35,16 @@ arenaReadJSON <- function() {
   if ( arena.chainSummary$baseUnit == "" )              arena.chainSummary$samplingDesign    <- FALSE
   # b) stratum attribute is missing
   if ( is.null( arena.chainSummary$stratumAttribute ))  arena.chainSummary$stratumAttribute  <- ""
-  # nonresponse bias correction is missing
-  if ( is.null( arena.chainSummary$analysis$nonResponseBiasCorrection )) arena.chainSummary$analysis$nonResponseBiasCorrection   <- FALSE
+  # missing values?
+  if ( is.null( arena.chainSummary$nonResponseBiasCorrection )) arena.chainSummary$nonResponseBiasCorrection <- FALSE 
+  if ( is.null( arena.chainSummary$clusteringVariances ))       arena.chainSummary$clusteringVariances       <- FALSE   
   
-  arena.analyze   <- list()
+  arena.analyze                            <- list()
   arena.analyze$stratification_area_exists <- FALSE
   
   # change comma to dot (if it is used as decimal separator in UI)
-  arena.chainSummary$analysis$reportingArea <- stringr::str_replace( arena.chainSummary$analysis$reportingArea, ",", ".")
-  arena.analyze$reportingArea               <- as.numeric( paste0( "0", trimws( arena.chainSummary$analysis$reportingArea ))) 
+  if (!is.null(arena.chainSummary$reportingArea)) arena.analyze$reportingArea <- stringr::str_replace( arena.chainSummary$reportingArea, ",", ".")
+  arena.analyze$reportingArea  <- as.numeric( paste0( "0", trimws( arena.analyze$reportingArea ))) 
   
   return( list(arena.analyze, arena.chainSummary) )
 } # arenaReadJSON
@@ -154,14 +155,14 @@ arenaAnalytics_LowAggData <- function() {
 
       # G2. Read PSU and SSU numbers --------------------------------------------
       # PSU = primary sampling unit, SSU = secondary sampling unit
-      if ( arena.chainSummary$analysis$nonResponseBiasCorrection ) {
+      if ( arena.chainSummary$nonResponseBiasCorrection ) {
         if (  'design_psu' %in% names( aoi_df) & !'design_ssu' %in% names( aoi_df)) aoi_df$design_ssu <- 0
         if ( !'design_psu' %in% names( aoi_df) &  'design_ssu' %in% names( aoi_df)) aoi_df$design_psu <- 0
         if (  'design_psu' %in% names( aoi_df) &  'design_ssu' %in% names( aoi_df)) {
           aoi_df$design_psu <- as.numeric( aoi_df$design_psu)
           aoi_df$design_ssu <- as.numeric( aoi_df$design_ssu)
         } else {
-          arena.chainSummary$analysis$nonResponseBiasCorrection <- FALSE
+          arena.chainSummary$nonResponseBiasCorrection <- FALSE
           aoi_df$design_psu <- 0
           aoi_df$design_ssu <- 0
         }
@@ -225,7 +226,7 @@ arenaAnalytics_LowAggData <- function() {
         dplyr::select( all_of( cluster_UUID_), sum_weight_, cluster_count_ )    %>%
         dplyr::right_join( df_base_unit, by = cluster_UUID_ )                
       
-      if (!arena.chainSummary$analysis$clusteringVariances) df_base_unit$weight = df_base_unit$weight / df_base_unit$sum_weight_ 
+      if (!arena.chainSummary$clusteringVariances) df_base_unit$weight = df_base_unit$weight / df_base_unit$sum_weight_ 
       df_base_unit$weight[ is.na(df_base_unit$weight) ] <- 0
     } 
     
@@ -239,7 +240,7 @@ arenaAnalytics_LowAggData <- function() {
     # J1. Apply nonresponse bias correction for weights: SSUs ----------------------------
 
     # MISSING SECONDARY SAMPLING UNITS (SSUs): non-response bias correction, Weighting Class Adjustment method
-    if ( arena.analyze$stratification & !is.null( aoi_df) & cluster_UUID_ != "" & arena.chainSummary$analysis$nonResponseBiasCorrection) {  # aoi exist
+    if ( arena.analyze$stratification & !is.null( aoi_df) & cluster_UUID_ != "" & arena.chainSummary$nonResponseBiasCorrection) {  # aoi exist
       aoi_df[ arena.analyze$strat_attribute ] <- aoi_df$code
       
       if ('design_ssu' %in% names( aoi_df)) {
@@ -280,7 +281,7 @@ arenaAnalytics_LowAggData <- function() {
         }
       }
       
-    } else if (cluster_UUID_ != "" & arena.chainSummary$analysis$nonResponseBiasCorrection & !arena.chainSummary$analysis$clusteringVariances) {
+    } else if (cluster_UUID_ != "" & arena.chainSummary$nonResponseBiasCorrection & !arena.chainSummary$clusteringVariances) {
       # non-stratified cluster sampling with non-response bias correction (for missing samples in clusters)
       ssu_max                           <- max( df_base_unit$cluster_count_ )
       df_base_unit$weight_ssu_correction_ <- ifelse( ssu_max > 0 & df_base_unit$sum_weight_ > 0, ( ssu_max / df_base_unit$cluster_count_ ) , 1 )
@@ -293,7 +294,7 @@ arenaAnalytics_LowAggData <- function() {
     # J2. Apply nonresponse bias correction for weights: PSUs -----------------------------
 
     # STRATIFIED SAMPLING, MISSING PRIMARY SAMPLING UNITS (PSUs): non-response bias correction, Weighting Class Adjustment method
-    if ( arena.analyze$stratification & !is.null( aoi_df ) & arena.chainSummary$analysis$nonResponseBiasCorrection ) {  
+    if ( arena.analyze$stratification & !is.null( aoi_df ) & arena.chainSummary$nonResponseBiasCorrection ) {  
       aoi_df[ arena.analyze$strat_attribute ] <- aoi_df$code
       
       if ( 'design_psu' %in% names( aoi_df) ) {
@@ -339,7 +340,7 @@ arenaAnalytics_LowAggData <- function() {
     df_base_unit$weight_nocorrection_  <- df_base_unit$weight
     df_base_unit$weight                <- df_base_unit$weight * df_base_unit$weight_ssu_correction_ * df_base_unit$weight_psu_correction_
     sNonResponseColumnInfo             <- ""
-    if (arena.chainSummary$analysis$nonResponseBiasCorrection) sNonResponseColumnInfo <- c('weight_nocorrection_', 'weight_psu_correction_', 'weight_ssu_correction_')
+    if (arena.chainSummary$nonResponseBiasCorrection) sNonResponseColumnInfo <- c('weight_nocorrection_', 'weight_psu_correction_', 'weight_ssu_correction_')
     
 
   # K. Calculate area expansion factors for base units ----------------------
@@ -695,7 +696,7 @@ arenaAnalytics_LowAggData <- function() {
   
   processMessage = ""  
 
-  # if ( arena.chainSummary$analysis$nonResponseBiasCorrection) {
+  # if ( arena.chainSummary$nonResponseBiasCorrection) {
   #   if ( arena.analyze$stratification ) {
   #     nonResponse_out1 <- df_base_unit %>% select( STRATUM = all_of( arena.analyze$strat_attribute), correction_factor = weight_psu_correction_ ) %>% unique() %>% arrange( STRATUM)  
   #     tryCatch({if (exists('user_file_path') & exists("nonResponse_out1")) write.csv( nonResponse_out1, out_file[[5]], row.names = F)},

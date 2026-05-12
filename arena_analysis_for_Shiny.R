@@ -37,7 +37,9 @@ arenaReadJSON <- function() {
   if ( is.null( arena.chainSummary$stratumAttribute ))  arena.chainSummary$stratumAttribute  <- ""
   # missing values?
   if ( is.null( arena.chainSummary$nonResponseBiasCorrection )) arena.chainSummary$nonResponseBiasCorrection <- FALSE 
+  if ( arena.chainSummary$nonResponseBiasCorrection == "")      arena.chainSummary$nonResponseBiasCorrection <- FALSE 
   if ( is.null( arena.chainSummary$clusteringVariances ))       arena.chainSummary$clusteringVariances       <- FALSE   
+  if ( arena.chainSummary$clusteringVariances == "")            arena.chainSummary$clusteringVariances       <- FALSE   
   
   arena.analyze                            <- list()
   arena.analyze$stratification_area_exists <- FALSE

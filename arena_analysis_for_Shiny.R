@@ -622,7 +622,7 @@ arenaAnalytics_LowAggData <- function() {
         mau_file_names           <- names( out_file_mau_data)
         
         base_unit_attribute_names <- mau_file_names[ result_cat_attributes[[i]] %in% names(df_base_unit)]
-        mau_base_unit_totals      <- df_base_unit %>% select( any_of(base_unit_attribute_names)) %>% 
+        mau_base_unit_totals      <- df_base_unit %>% select( any_of(base_unit_attribute_names), any_of(cluster_UUID_)) %>% 
           left_join(base_unit.results[[i]] %>% select(all_of(base_UUID_), any_of(ends_with(".Total")), entity_count_ = item_count) , by = base_UUID_ )
         
         data_names <- names(mau_base_unit_totals)

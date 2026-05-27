@@ -678,6 +678,12 @@ arenaAnalytics_LowAggData <- function() {
     # The new Shiny application will be launched 2026
     if ( dir.exists( './user_output/MAU')) {
       # with categories, taxonomies, chainSummary, SchemaSummary
+      arena.schemaSummary$hiddenInAnalyticalDashboard <- as.logical(arena.schemaSummary$hiddenInAnalyticalDashboard)
+      arena.schemaSummary$key      <- as.logical(arena.schemaSummary$key)
+      arena.schemaSummary$multiple <- as.logical(arena.schemaSummary$multiple)
+      arena.schemaSummary$readOnly <- as.logical(arena.schemaSummary$readOnly)
+      arena.schemaSummary$key      <- as.logical(arena.schemaSummary$key)
+      
       write.csv( arena.schemaSummary, "./user_output/MAU/SchemaSummary.csv", row.names = F)
       
       df_ResultDimensions <- df_ResultDimensions[,c(2, 1)] # swap column order
@@ -690,7 +696,7 @@ arenaAnalytics_LowAggData <- function() {
       files_to_zip[ length( files_to_zip) + 1] <- "./chain_summary.json"
       
       f_name <- paste0('./user_output/MAU_Shiny_(', arena.chainSummary$surveyName, ').zip')
-      zip::zipr( f_name, files_to_zip)
+      zip::zipr( f_name, files_to_zip, mode= "cherry-pick")
     }   
   
 # ******************************************************************* -----

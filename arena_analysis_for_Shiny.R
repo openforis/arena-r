@@ -677,6 +677,9 @@ arenaAnalytics_LowAggData <- function() {
     # create Minimum Area Unit (MAU) table zip file for ARENA Shiny Reporter
     # The new Shiny application will be launched 2026
     if ( dir.exists( './user_output/MAU')) {
+      # copy "./chain_summary.json" to /MAU folder
+      file.copy('./chain_summary.json', './user_output/MAU', overwrite = TRUE)  
+      
       # with categories, taxonomies, chainSummary, SchemaSummary
       arena.schemaSummary$hiddenInAnalyticalDashboard <- as.logical(arena.schemaSummary$hiddenInAnalyticalDashboard)
       arena.schemaSummary$key      <- as.logical(arena.schemaSummary$key)

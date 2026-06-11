@@ -447,10 +447,12 @@ arenaAnalytics_LowAggData <- function() {
       # M2. List of all categorical, taxonomic and boolean attributes -----------
       
       # categorical, taxonomical
-      result_cat_attributes[[i]] <- ( df_entitydata  %>% select( where( ~!all( is.na(.)))) %>% select( where( ~is.character(.))) )  %>%
+      cat_attributes_ <- ( df_entitydata  %>% select( where( ~!all( is.na(.)))) %>% select( where( ~is.character(.))) )  %>%
         select(ends_with("_label") | ends_with("_scientific_name")) %>% 
         names()
 
+      result_cat_attributes[[i]] <- cat_attributes_
+      
       # booleans
       boolean_list <-  ( df_entitydata  %>% select( where( ~!all( is.na(.)))) %>% select( where( ~is.logical(.))) )  %>%
         names()
@@ -461,6 +463,13 @@ arenaAnalytics_LowAggData <- function() {
       # Remove: _label, _scientific_name 
       result_cat_attributes[[i]] <- ifelse( stringr::str_sub(result_cat_attributes[[i]], -6, -1)  == "_label",           stringr::str_sub(result_cat_attributes[[i]], 0, -7),  result_cat_attributes[[i]] )  
       result_cat_attributes[[i]] <- ifelse( stringr::str_sub(result_cat_attributes[[i]], -16, -1) == "_scientific_name", stringr::str_sub(result_cat_attributes[[i]], 0, -17), result_cat_attributes[[i]] )  
+      cat_attributes_ <- ifelse( stringr::str_sub(cat_attributes_, -6, -1)  == "_label",           stringr::str_sub(cat_attributes_, 0, -7),  cat_attributes_ )  
+      cat_attributes_ <- ifelse( stringr::str_sub(cat_attributes_, -16, -1) == "_scientific_name", stringr::str_sub(cat_attributes_, 0, -17), cat_attributes_ )  
+      
+      # fix issue with categorical data being read in as an integer 
+      df_entitydata <- df_entitydata %>%
+        dplyr::mutate( across( any_of(cat_attributes_), ~as.character(.)))
+      rm(cat_attributes_)
       
       # join parents' categorical result attributes with entity data
       # add categorical result variables

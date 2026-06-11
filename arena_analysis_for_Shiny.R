@@ -707,7 +707,7 @@ arenaAnalytics_LowAggData <- function() {
       files_to_zip                             <- list.files("./user_output/MAU", full.names = TRUE)
       files_to_zip[ length( files_to_zip) + 1] <- "./chain_summary.json"
       
-      f_name <- paste0('./user_output/MAU_Shiny_(', arena.chainSummary$surveyName, ').zip')
+      f_name <- paste0('./user_output/MAU_Shiny_(', arena.chainSummary$surveyName, '--', Sys.Date(), ').zip')
       zip::zipr( f_name, files_to_zip, mode= "cherry-pick")
     }   
   

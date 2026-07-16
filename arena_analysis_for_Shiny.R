@@ -1,25 +1,28 @@
 # #######################################################################*
+# version date: 16 June 2026
 #
-# The main function 'arenaAnalytics_LowAggData' is used to compute estimates for base units and clusters, 
+# Thesese scripts are used to compute estimates for base units and clusters, 
 # at the lowest aggregate level. We call the output files as Minimum Area Unit (MAU) tables.
-# These tables are computed for all entities in the chain which contain active area-based variables.
+# These tables are computed for all entities in the Arena's chain which contain active area-based variables.
 #
-# The function 'arenaAnalytics_LowAggData()' is called in the Arena's data processing chain ('statistical-analysis.R').
+# The main function 'arenaAnalytics_LowAggData()' is called in the Arena's data processing chain ('statistical-analysis.R').
 # 
-# Internally, the script creates a list of data frames for statistical analysis (as 'result_cat' in the script).
-# From these tables one can aggregate and filter all the data needed for the statistical analysis.
-# The analysis are run with the help of the Arena Reporter Shiny app.
+# First, the process creates lists of data frames for statistical analysis (as 'result_cat' in the script).
+# One list per entity, such as 'tree','bamboo', etc.
+# From these tables we can further aggregate and filter all the data needed for the statistical analysis with help of 
+# the 'survey' package.
+# The analysis are run with the help of the Arena Reporter (Shiny) app.
 #
-# A MAU table contains "totals" and areas, at the base unit level for all area-based (active) variables, 
-# across all categorical, taxonomic and Boolean attributes, by entities (such as 'tree','bamboo', etc.).
+# A MAU table contains "totals" and areas, at the base unit level for all area-based (active) quantitative variables, 
+# across all categorical, taxonomic and Boolean attributes.
 #
 #
 # Required R packages (with dependencies): dplyr, stringr, rlang, pacman, tidyr (>= 1.3.0)
 #
-# Created by:   Lauri Vesa, FAO
-#               Gael Sola, FAO
-#               Javier Garcia Perez, FAO
-#               Anibal Cuchietti, FAO
+# Created by:   Lauri Vesa,             FAO
+#               Gael Sola,              FAO
+#               Javier Garcia Perez,    FAO
+#               Anibal Cuchietti,       FAO
 #               Jimena Saucedo Miranda, FAO
 #
 #######################################################################*
@@ -91,7 +94,8 @@ arenaAnalytics_LowAggData <- function() {
   )
   
   usePackage('tidyr')
-
+  options( dplyr.summarise.inform = F)
+  
   # B. Read json data -------------------------------------------------------
 
   arena_return        <- arenaReadJSON()
@@ -103,6 +107,33 @@ arenaAnalytics_LowAggData <- function() {
   # 
   if ( !arena.chainSummary$samplingDesign ) return("No sampling design in this chain")
   if ( is.null(arena.chainSummary$samplingStrategy)) return( "Arena Analytics: No sampling strategy selected" )
+  
+  # C. Two-phase sampling - read 1st phase data  ----------------------------------
+  if (arena.chainSummary$samplingStrategy == 5) {
+    # Get phase 1 data
+    data_phase1 <- categories[[ arena.chainSummary$phase1Category ]]  %>% select(-uuid)
+    if ( is.null( data_phase1)) {
+      Results_out <- "Two-phase sampling: Failed! Missing 1st phase category table!"
+      return( Results_out )
+    } 
+    
+    # If Joint category is missing, return error msg
+    joint_category_          <- arena.chainSummary$commonAttribute
+    if ( is.null(joint_category_) ) return( "Two-phase sampling: Failed! Common Attribute is missing" )
+    if ( joint_category_ == "")     return( "Two-phase sampling: Failed! Common Attribute is missing" )
+    
+    # Note, take parentCode from arena.schemaSummary in order to select the correct level!
+    cat_level <- arena.schemaSummary    %>% 
+      filter( name == joint_category_)  %>% 
+      select( categoryName, parentCode) %>%
+      mutate( level = ifelse( is.na(parentCode) | parentCode == "", 1, as.integer( stringr::str_sub( categoryName, -4, -2)))) %>%
+      select( level)                    %>%
+      pull()
+    
+    if (cat_level > 1) print(paste0("WARNING: the common attribute is in a hierarchical table at level ", cat_level, ". It is assumed that all that category level codes are unique!"))
+    rm( cat_level)
+  }  # END: arena.chainSummary$samplingStrategy == 5
+  
   
   # SAMPLING DESIGN EXISTS. 
   # Compute expansion factors, sum of area-based variables & weights up to base unit level, and non-response bias corrections
@@ -145,6 +176,28 @@ arenaAnalytics_LowAggData <- function() {
     arena.analyze$stratification   <- ifelse(( arena.chainSummary$samplingStrategy == 3 | arena.chainSummary$samplingStrategy == 4  | arena.chainSummary$samplingStrategy == 5 ) & arena.chainSummary$stratumAttribute != "", TRUE, FALSE)
     arena.analyze$strat_attribute  <- ifelse( arena.analyze$stratification, arena.chainSummary$stratumAttribute, "")
     
+# F. Two-phase sampling: Get 'Phase_'  into the 1st phase table   -------------------
+    # Phase_: '-1': weight=0 (inaccessible), '1' = only in 1st phase, '2'=in 2nd phase 
+    # For joining, needed new ID_ into both tables, to join the tables
+    if (arena.chainSummary$samplingStrategy == 5 ) {
+      if ('code_joint' %in% names(data_phase1)) {
+        data_phase1$ID_ <- data_phase1$code_joint
+      } else if (!('level_1_code' %in% names(data_phase1)) & 'code' %in% names(data_phase1)) {
+        data_phase1$ID_ = data_phase1$code
+      } else {
+        data_phase1$ID_ = data_phase1[,1]
+      }
+      
+      df_base_unit$ID_ <- df_base_unit[[ arena.chainSummary$baseUnitEntityKeys[ length(arena.chainSummary$baseUnitEntityKeys)]]]
+      
+      data_phase1 <- data_phase1 %>% 
+        left_join(df_base_unit %>%
+                    mutate( Phase_ = if_else(weight > 0, '2', '-1')) %>%
+                    select(ID_, Phase_),  
+                  by="ID_" )
+      
+      data_phase1$Phase_[ is.na(data_phase1$Phase_)] <- '1'
+    }
 
     # G1. Read AOIs (areas of strata) -----------------------------------------
 
@@ -360,7 +413,9 @@ arenaAnalytics_LowAggData <- function() {
                             dplyr::select( all_of( arena.analyze$strat_attribute), area), by = arena.analyze$strat_attribute ) %>% 
         data.frame()
       
-      # test this
+      # test this JATKA!
+      # chatGPT: "in R survey, in two phase sampling, how do we give in the areas of strata?"
+      
       if (arena.chainSummary$samplingStrategy == 5) {
         arena.analyze$reportingArea <- 0
         df_base_unit$exp_factor_    <- NULL
@@ -416,7 +471,8 @@ arenaAnalytics_LowAggData <- function() {
     # active area-based result variables (of all entities)
     # parents of base units cannot have area-based variables!
     result_entities <- arena.chainSummary$resultVariables %>%
-      dplyr::filter( areaBased == TRUE & active == TRUE & stringr::str_detect(entityPath, arena.chainSummary$baseUnit))  %>%
+#      dplyr::filter( areaBased == TRUE & active == TRUE & stringr::str_detect(entityPath, arena.chainSummary$baseUnit))  %>%
+      dplyr::filter( areaBased == TRUE & active == TRUE )  %>%
       #      filter(entity != arena.chainSummary$baseUnit) %>%  
       select( entity ) %>% 
       unique()         %>%
@@ -632,6 +688,7 @@ arenaAnalytics_LowAggData <- function() {
         
         base_unit_attribute_names <- mau_file_names[ result_cat_attributes[[i]] %in% names(df_base_unit)]
         mau_base_unit_totals      <- df_base_unit %>% select( any_of(base_unit_attribute_names), any_of(cluster_UUID_)) %>% 
+          mutate(across(-weight & -exp_factor_, as.character)) %>%
           left_join(base_unit.results[[i]] %>% select(all_of(base_UUID_), any_of(ends_with(".Total")), entity_count_ = item_count) , by = base_UUID_ )
         
         data_names <- names(mau_base_unit_totals)

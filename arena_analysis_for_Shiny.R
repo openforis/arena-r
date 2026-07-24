@@ -1,5 +1,5 @@
 # #######################################################################*
-# version date: 16 June 2026
+# version date: 16 July 2026
 #
 # Thesese scripts are used to compute estimates for base units and clusters, 
 # at the lowest aggregate level. We call the output files as Minimum Area Unit (MAU) tables.
@@ -693,6 +693,8 @@ arenaAnalytics_LowAggData <- function() {
         
         data_names <- names(mau_base_unit_totals)
         names( mau_base_unit_totals)                  <- gsub( "_ha.Total", "", data_names) 
+        out_file_mau_data                             <- out_file_mau_data %>%
+                                                           dplyr::mutate( across( where( is.logical), ~as.character(.)))
         out_file_mau_data$mau_baseunit_total          <- FALSE
         mau_base_unit_totals$mau_baseunit_total       <- TRUE
         out_file_mau_data                             <- dplyr::bind_rows( out_file_mau_data, mau_base_unit_totals)

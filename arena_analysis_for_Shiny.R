@@ -1,7 +1,7 @@
 # #######################################################################*
-# version date: 16 July 2026
+# version date: 25 July 2026
 #
-# Thesese scripts are used to compute estimates for base units and clusters, 
+# These scripts are used to compute estimates for base units and clusters, 
 # at the lowest aggregate level. We call the output files as Minimum Area Unit (MAU) tables.
 # These tables are computed for all entities in the Arena's chain which contain active area-based variables.
 #
@@ -105,11 +105,11 @@ arenaAnalytics_LowAggData <- function() {
   rm(arena_return)
   
   # 
-  if ( !arena.chainSummary$samplingDesign ) return("No sampling design in this chain")
+  if ( !arena.chainSummary$samplingDesign )          return("No sampling design in this chain")
   if ( is.null(arena.chainSummary$samplingStrategy)) return( "Arena Analytics: No sampling strategy selected" )
   
   # C. Two-phase sampling - read 1st phase data  ----------------------------------
-  if (arena.chainSummary$samplingStrategy == 5) {
+  if ( arena.chainSummary$samplingStrategy == 5) {
     # Get phase 1 data
     data_phase1 <- categories[[ arena.chainSummary$phase1Category ]]  %>% select(-uuid)
     if ( is.null( data_phase1)) {
@@ -127,8 +127,7 @@ arenaAnalytics_LowAggData <- function() {
       filter( name == joint_category_)  %>% 
       select( categoryName, parentCode) %>%
       mutate( level = ifelse( is.na(parentCode) | parentCode == "", 1, as.integer( stringr::str_sub( categoryName, -4, -2)))) %>%
-      select( level)                    %>%
-      pull()
+      pull( level)
     
     if (cat_level > 1) print(paste0("WARNING: the common attribute is in a hierarchical table at level ", cat_level, ". It is assumed that all that category level codes are unique!"))
     rm( cat_level)
@@ -176,29 +175,58 @@ arenaAnalytics_LowAggData <- function() {
     arena.analyze$stratification   <- ifelse(( arena.chainSummary$samplingStrategy == 3 | arena.chainSummary$samplingStrategy == 4  | arena.chainSummary$samplingStrategy == 5 ) & arena.chainSummary$stratumAttribute != "", TRUE, FALSE)
     arena.analyze$strat_attribute  <- ifelse( arena.analyze$stratification, arena.chainSummary$stratumAttribute, "")
     
-# F. Two-phase sampling: Get 'Phase_'  into the 1st phase table   -------------------
-    # Phase_: '-1': weight=0 (inaccessible), '1' = only in 1st phase, '2'=in 2nd phase 
-    # For joining, needed new ID_ into both tables, to join the tables
-    if (arena.chainSummary$samplingStrategy == 5 ) {
+    # F. Two-phase sampling: Add 'in_Phase2' and base unit data into the 1st phase table   -------------------
+    # in_Phase2: Boolean variable, TRUE for field plots 
+    # For joining, needed a new 'ID_' into both tables for joining the tables
+    if ( arena.chainSummary$samplingStrategy == 5 ) {
+      
       if ('code_joint' %in% names(data_phase1)) {
-        data_phase1$ID_ <- data_phase1$code_joint
+        data_phase1$ID_ <- as.character( data_phase1$code_joint)
       } else if (!('level_1_code' %in% names(data_phase1)) & 'code' %in% names(data_phase1)) {
-        data_phase1$ID_ = data_phase1$code
+        data_phase1$ID_ = as.character( data_phase1$code)
       } else {
-        data_phase1$ID_ = data_phase1[,1]
+        data_phase1$ID_ = as.character( data_phase1[,1])
       }
       
-      df_base_unit$ID_ <- df_base_unit[[ arena.chainSummary$baseUnitEntityKeys[ length(arena.chainSummary$baseUnitEntityKeys)]]]
+      # take out cluster rows from sampling_point_data
+      if (cluster_UUID_ != "") data_phase1 <- data_phase1 %>% filter( level == max(level))
       
-      data_phase1 <- data_phase1 %>% 
-        left_join(df_base_unit %>%
-                    mutate( Phase_ = if_else(weight > 0, '2', '-1')) %>%
-                    select(ID_, Phase_),  
-                  by="ID_" )
+      data_phase1_names <- data_phase1 %>% select(-ID_) %>%  names() 
       
-      data_phase1$Phase_[ is.na(data_phase1$Phase_)] <- '1'
-    }
+      df_base_unit$ID_  <- as.character( df_base_unit[[ arena.chainSummary$baseUnitEntityKeys[ length(arena.chainSummary$baseUnitEntityKeys)]]])
+      
+      # get all base unit attribute names (character & Boolean) for 1 phase table
+      base_unit_columns_to_join <-  df_base_unit %>% 
+        select( -record_uuid, -record_owner_uuid, -any_of(arena.chainSummary$commonAttribute), -any_of(ends_with("_label")), -any_of(ends_with("_srs")), -any_of(ends_with("_scientific_name"))) %>%
+        select(any_of( arena.analyze$strat_attribute), where( ~is.character(.)) | where( ~is.logical(.))) %>%
+        select(-any_of(data_phase1_names)) %>%
+        names()
+      
+      # drop out base unit names that are not submitted into arenalytics
+      base_unit_columns_to_join <- arena.schemaSummary  %>% 
+        select( name, hiddenInAnalyticalDashboard)      %>% 
+        mutate( hiddenInAnalyticalDashboard = as.logical(hiddenInAnalyticalDashboard)) %>%
+        filter( name %in% base_unit_columns_to_join)    %>%
+        filter( !hiddenInAnalyticalDashboard )          %>%
+        select( name) %>%
+        pull()
+      
+      base_unit_columns_to_join <- c('ID_', base_unit_columns_to_join)
+      
+      data_phase1 <- data_phase1              %>% 
+        left_join(df_base_unit                %>%
+                    mutate( in_Phase2 = TRUE) %>%
+                    select( ID_, in_Phase2, any_of(base_unit_columns_to_join), any_of(cluster_UUID_), any_of(base_UUID_)),  
+      by = "ID_" ) %>%
+        mutate(across(any_of(base_unit_columns_to_join), ~ replace(., is.na(.), "")))
 
+      data_phase1$in_Phase2[ is.na(data_phase1$in_Phase2)] <- FALSE 
+      
+      
+      rm( data_phase1_names)
+      rm( base_unit_columns_to_join)
+    } # 2-phase sampling
+    
     # G1. Read AOIs (areas of strata) -----------------------------------------
 
     aoi_df     <- NULL
@@ -346,7 +374,7 @@ arenaAnalytics_LowAggData <- function() {
     # 2. stratified sampling,  bias correction for missing clusters/plots
     
 
-    # J2. Apply nonresponse bias correction for weights: PSUs -----------------------------
+    # J2. Apply non-response bias correction for weights: PSUs -----------------------------
 
     # STRATIFIED SAMPLING, MISSING PRIMARY SAMPLING UNITS (PSUs): non-response bias correction, Weighting Class Adjustment method
     if ( arena.analyze$stratification & !is.null( aoi_df ) & arena.chainSummary$nonResponseBiasCorrection ) {  
@@ -413,22 +441,7 @@ arenaAnalytics_LowAggData <- function() {
                             dplyr::select( all_of( arena.analyze$strat_attribute), area), by = arena.analyze$strat_attribute ) %>% 
         data.frame()
       
-      # test this JATKA!
-      # chatGPT: "in R survey, in two phase sampling, how do we give in the areas of strata?"
-      
-      if (arena.chainSummary$samplingStrategy == 5) {
-        arena.analyze$reportingArea <- 0
-        df_base_unit$exp_factor_    <- NULL
-        arena.expansion_factor$join_var  <- arena.expansion_factor[[1]]  
-        join_df                          <- twoPhaseSampling_results[[3]] %>% dplyr::select(join_var = code, area) 
-        
-        arena.expansion_factor <- arena.expansion_factor %>%
-          dplyr::select( -area ) %>%
-          left_join( join_df, by = 'join_var') %>%
-          dplyr::select( -join_var)
-      }
-      # test ends
-      
+
       if ( all( aoi_df$area == 0) & ( arena.analyze$reportingArea > 0 )) arena.expansion_factor$area <-  arena.analyze$reportingArea / sum( arena.expansion_factor$aoi_weight_) *  arena.expansion_factor$aoi_weight_ 
       
       arena.expansion_factor$exp_factor_ <- arena.expansion_factor$area / arena.expansion_factor$aoi_weight_ 
@@ -642,28 +655,27 @@ arenaAnalytics_LowAggData <- function() {
       
       # Note: above-computed (M4) Means are not used!
       ## get results at the base unit level for each result variable for MAU
-      if (result_entities[[i]] != arena.chainSummary$baseUnit) {
-        out_path  <- "MAU/"
-        dir.create( paste0( user_file_path, out_path ), showWarnings = FALSE )
-        
-        keys_to_add <- which( !(arena.chainSummary$baseUnitEntityKeys %in% names(result_cat[[i]])))
-        if (length(keys_to_add) > 0) {
-          join_col <- df_base_unit %>% select(all_of(base_UUID_), all_of(arena.chainSummary$baseUnitEntityKeys[keys_to_add])) %>%
-            dplyr::mutate( across( where( is.numeric), ~as.character(.))) %>% distinct()
-          
-          out_file_mau_data <- result_cat[[i]] %>% left_join(join_col, by = base_UUID_) 
-        } else {
-          out_file_mau_data <- result_cat[[i]]
-        }
-        
-        # Keep only TOTALS
-        out_file_mau_data         <- out_file_mau_data %>% select( -ends_with(".Mean"))
-        data_names                <- names( out_file_mau_data)
-        names(out_file_mau_data)  <- gsub( "_ha.Total", "", data_names) 
 
-      }      
+      out_path  <- "MAU/"
+      dir.create( paste0( user_file_path, out_path ), showWarnings = FALSE )
+      
+      keys_to_add <- which( !(arena.chainSummary$baseUnitEntityKeys %in% names(result_cat[[i]])))
+      if (length(keys_to_add) > 0) {
+        join_col <- df_base_unit %>% select(all_of(base_UUID_), all_of(arena.chainSummary$baseUnitEntityKeys[keys_to_add])) %>%
+          dplyr::mutate( across( where( is.numeric), ~as.character(.))) %>% distinct()
+        
+        out_file_mau_data <- result_cat[[i]] %>% left_join(join_col, by = base_UUID_) 
+      } else {
+        out_file_mau_data <- result_cat[[i]]
+      }
+      
+      # Keep only TOTALS
+      out_file_mau_data         <- out_file_mau_data %>% select( -ends_with(".Mean"))
+      data_names                <- names( out_file_mau_data)
+      names(out_file_mau_data)  <- gsub( "_ha.Total", "", data_names) 
 
-      # M8. Per hectare results at base unit level (out) --------
+
+      # M7. Per hectare results at base unit level (out) --------
       
       ## Per hectare results at the base unit level for each result variable (out)
       base_unit.results[[i]] <- df_entitydata %>%
@@ -681,7 +693,7 @@ arenaAnalytics_LowAggData <- function() {
       df_base_unit <- df_base_unit %>%
         dplyr::left_join( base_unit.results[[i]] %>% select(-item_count), by = base_UUID_)
       
-      # M7b. Add plot totals into the MAU table -------------------------------------------
+      # M8. Add plot totals into the MAU table -------------------------------------------
       
       if (exists('out_file_mau_data')) {
         mau_file_names           <- names( out_file_mau_data)
@@ -696,14 +708,19 @@ arenaAnalytics_LowAggData <- function() {
         out_file_mau_data                             <- out_file_mau_data %>%
                                                            dplyr::mutate( across( where( is.logical), ~as.character(.)))
         out_file_mau_data$mau_baseunit_total          <- FALSE
-        mau_base_unit_totals$mau_baseunit_total       <- TRUE
-        out_file_mau_data                             <- dplyr::bind_rows( out_file_mau_data, mau_base_unit_totals)
-        out_file_mau_data[ is.na(out_file_mau_data )] <- ""
         
+        if ( result_entities[[i]] != arena.chainSummary$baseUnit) {
+          mau_base_unit_totals$mau_baseunit_total       <- TRUE
+          out_file_mau_data                             <- dplyr::bind_rows( out_file_mau_data, mau_base_unit_totals)
+          out_file_mau_data[ is.na(out_file_mau_data )] <- ""
+        } else {
+          out_file_mau_data$mau_baseunit_total          <- TRUE
+        }
+                  
         rm( base_unit_attribute_names); rm( mau_file_names) 
         rm( data_names); rm (mau_base_unit_totals)
         
-        # M7. Write MAU table into CSV -------------------------------------------
+        # M9. Write MAU table into CSV -------------------------------------------
         
         out_file_name <- paste0(user_file_path, "MAU/MAU_", result_entities[i], ".csv")
         tryCatch({if (exists('user_file_path'))  write.csv(out_file_mau_data, out_file_name,  row.names = F)},
@@ -715,7 +732,7 @@ arenaAnalytics_LowAggData <- function() {
       
       
       
-      # M9. Per hectare results at cluster level (out)  -------------------------
+      # M10. Per hectare results at cluster level (out)  -------------------------
       
       ## compute sum of per hectare results at the cluster level for each result variable
       
@@ -742,31 +759,30 @@ arenaAnalytics_LowAggData <- function() {
     print( names(result_cat))
     
     
-    # create Minimum Area Unit (MAU) table zip file for ARENA Shiny Reporter
-    # The new Shiny application will be launched 2026
+    # create Minimum Area Unit (MAU) zip file for ARENALYTICS (Shiny tool)
+    # The new Shiny application will be launched in 2026
     if ( dir.exists( './user_output/MAU')) {
-      # copy "./chain_summary.json" to /MAU folder
       file.copy('./chain_summary.json', './user_output/MAU', overwrite = TRUE)  
       
-      # with categories, taxonomies, chainSummary, SchemaSummary
+      # categories, taxonomies, chainSummary, SchemaSummary
       arena.schemaSummary$hiddenInAnalyticalDashboard <- as.logical(arena.schemaSummary$hiddenInAnalyticalDashboard)
       arena.schemaSummary$key      <- as.logical(arena.schemaSummary$key)
       arena.schemaSummary$multiple <- as.logical(arena.schemaSummary$multiple)
       arena.schemaSummary$readOnly <- as.logical(arena.schemaSummary$readOnly)
-      arena.schemaSummary$key      <- as.logical(arena.schemaSummary$key)
-      
       write.csv( arena.schemaSummary, "./user_output/MAU/SchemaSummary.csv", row.names = F)
       
       df_ResultDimensions <- df_ResultDimensions[,c(2, 1)] # swap column order
       df_ResultDimensions <- subset( df_ResultDimensions, !endsWith( dimension, "_uuid" ))
       write.csv( df_ResultDimensions, "./user_output/MAU/ReportDimensions.csv", row.names = F)
+      if ( exists( 'data_phase1')) write.csv( data_phase1, "./user_output/MAU/data_phase1.csv", row.names = F)
       
-      if ( exists( 'categories')) saveRDS( categories, "./user_output/MAU/categories.rds")
-      if ( exists( 'taxonomies')) saveRDS( taxonomies, "./user_output/MAU/taxonomies.rds")
-      files_to_zip                             <- list.files("./user_output/MAU", full.names = TRUE)
+      if ( exists( 'categories'))  saveRDS( categories, "./user_output/MAU/categories.rds")
+      if ( exists( 'taxonomies'))  saveRDS( taxonomies, "./user_output/MAU/taxonomies.rds")
 
-      f_name <- paste0('./user_output/MAU_Shiny_(', arena.chainSummary$surveyName, '--', Sys.Date(), ').zip')
-      zip::zipr( f_name, files_to_zip, mode= "cherry-pick")
+      files_to_zip  <- list.files("./user_output/MAU", full.names = TRUE)
+      f_name        <- paste0('./user_output/MAU_Shiny_(', arena.chainSummary$surveyName, '--', Sys.Date(), ').zip')
+      zip::zipr( f_name, files_to_zip, mode = "cherry-pick")
+      rm(files_to_zip); rm(f_name)
     }   
   
 # ******************************************************************* -----

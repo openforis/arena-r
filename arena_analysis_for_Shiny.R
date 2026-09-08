@@ -108,32 +108,6 @@ arenaAnalytics_LowAggData <- function() {
   if ( !arena.chainSummary$samplingDesign )          return("No sampling design in this chain")
   if ( is.null(arena.chainSummary$samplingStrategy)) return( "Arena Analytics: No sampling strategy selected" )
   
-  # C. Two-phase sampling - read 1st phase data  ----------------------------------
-  if ( arena.chainSummary$samplingStrategy == 5) {
-    # Get phase 1 data
-    data_phase1 <- categories[[ arena.chainSummary$phase1Category ]]  %>% select(-uuid)
-    if ( is.null( data_phase1)) {
-      Results_out <- "Two-phase sampling: Failed! Missing 1st phase category table!"
-      return( Results_out )
-    } 
-    
-    # If Joint category is missing, return error msg
-    joint_category_          <- arena.chainSummary$commonAttribute
-    if ( is.null(joint_category_) ) return( "Two-phase sampling: Failed! Common Attribute is missing" )
-    if ( joint_category_ == "")     return( "Two-phase sampling: Failed! Common Attribute is missing" )
-    
-    # Note, take parentCode from arena.schemaSummary in order to select the correct level!
-    cat_level <- arena.schemaSummary    %>% 
-      filter( name == joint_category_)  %>% 
-      select( categoryName, parentCode) %>%
-      mutate( level = ifelse( is.na(parentCode) | parentCode == "", 1, as.integer( stringr::str_sub( categoryName, -4, -2)))) %>%
-      pull( level)
-    
-    if (cat_level > 1) print(paste0("WARNING: the common attribute is in a hierarchical table at level ", cat_level, ". It is assumed that all that category level codes are unique!"))
-    rm( cat_level)
-  }  # END: arena.chainSummary$samplingStrategy == 5
-  
-  
   # SAMPLING DESIGN EXISTS. 
   # Compute expansion factors, sum of area-based variables & weights up to base unit level, and non-response bias corrections
    
@@ -175,21 +149,32 @@ arenaAnalytics_LowAggData <- function() {
     arena.analyze$stratification   <- ifelse(( arena.chainSummary$samplingStrategy == 3 | arena.chainSummary$samplingStrategy == 4  | arena.chainSummary$samplingStrategy == 5 ) & arena.chainSummary$stratumAttribute != "", TRUE, FALSE)
     arena.analyze$strat_attribute  <- ifelse( arena.analyze$stratification, arena.chainSummary$stratumAttribute, "")
     
-    # F. Two-phase sampling: Add 'in_Phase2' and base unit data into the 1st phase table   -------------------
+    # F. Two-phase sampling: read phase-1 data. Add 'in_Phase2' and base unit data into the 1st phase table   -------------------
     # in_Phase2: Boolean variable, TRUE for field plots 
     # For joining, needed a new 'ID_' into both tables for joining the tables
     if ( arena.chainSummary$samplingStrategy == 5 ) {
+      # read 1st phase data  ----------------------------------
+        # Get phase 1 data
+        data_phase1 <- categories[[ arena.chainSummary$phase1Category ]]  %>% select(-uuid)
+        if ( is.null( data_phase1)) {
+          Results_out <- "Two-phase sampling -- failed! Missing Phase-1 category table!"
+          return( Results_out )
+        } 
+
+      if ( is.null(arena.chainSummary$commonAttribute) ) arena.chainSummary$commonAttribute == ""
       
-      if ('code_joint' %in% names(data_phase1)) {
+      if (arena.chainSummary$commonAttribute != "") {         # any category table joined here
+        data_phase1$ID_ <- as.character( data_phase1[[arena.chainSummary$commonAttribute]])
+      } else if ('code_joint' %in% names(data_phase1)) {      # Sampling Point Data case
         data_phase1$ID_ <- as.character( data_phase1$code_joint)
-      } else if (!('level_1_code' %in% names(data_phase1)) & 'code' %in% names(data_phase1)) {
-        data_phase1$ID_ = as.character( data_phase1$code)
+      } else if (!('level_1_code' %in% names(data_phase1)) & 'code' %in% names(data_phase1)) {   # Sampling Point Data case
+        data_phase1$ID_ = as.character( data_phase1$code)     # Sampling Point Data case
       } else {
-        data_phase1$ID_ = as.character( data_phase1[,1])
+        data_phase1$ID_ = as.character( data_phase1[,1])      # Sampling Point Data case, 1st column expected to be the joining attribute
       }
-      
+    
       # take out cluster rows from sampling_point_data
-      if (cluster_UUID_ != "") data_phase1 <- data_phase1 %>% filter( level == max(level))
+      if (cluster_UUID_ != "" & arena.chainSummary$commonAttribute == "") data_phase1 <- data_phase1 %>% filter( level == max(level))
       
       data_phase1_names <- data_phase1 %>% select(-ID_) %>%  names() 
       

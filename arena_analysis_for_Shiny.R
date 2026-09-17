@@ -1,5 +1,5 @@
 # #######################################################################*
-# version date: 25 July 2026
+# version date: 17 September 2026
 #
 # These scripts are used to compute estimates for base units and clusters, 
 # at the lowest aggregate level. We call the output files as Minimum Area Unit (MAU) tables.
@@ -20,6 +20,7 @@
 # Required R packages (with dependencies): dplyr, stringr, rlang, pacman, tidyr (>= 1.3.0)
 #
 # Created by:   Lauri Vesa,             FAO
+#               Stefano Ricci,          FAO
 #               Gael Sola,              FAO
 #               Javier Garcia Perez,    FAO
 #               Anibal Cuchietti,       FAO
@@ -96,7 +97,7 @@ arenaAnalytics_LowAggData <- function() {
   usePackage('tidyr')
   options( dplyr.summarise.inform = F)
   
-  # B. Read json data -------------------------------------------------------
+  # A. Read json data -------------------------------------------------------
 
   arena_return        <- arenaReadJSON()
   if (!is.list(arena_return)) return( arena_return ) # Error or no data message is returned
@@ -111,7 +112,7 @@ arenaAnalytics_LowAggData <- function() {
   # SAMPLING DESIGN EXISTS. 
   # Compute expansion factors, sum of area-based variables & weights up to base unit level, and non-response bias corrections
    
-# D. Create a folder for output data --------------------------------------
+# B. Create a folder for output data --------------------------------------
 
     if ( !exists('user_file_path')) user_file_path <- './user_output/'
     # create a folder for files to be exported
@@ -125,7 +126,7 @@ arenaAnalytics_LowAggData <- function() {
     if (length(f)) file.remove(f)
     rm(f)
     
-# E1. Join entity table 'arena_join'  --------------------------------------    
+# C. Join entity table 'arena_join'  --------------------------------------    
     if (!is.null( categories$arena_join)) {
 #      source( "C:/Users/User/Documents/0 R and Shiny/arena-r/arena_join_entitytable.R")
       source( "https://raw.githubusercontent.com/openforis/r-arena/master/arena_join_entitytable.R")
@@ -134,7 +135,7 @@ arenaAnalytics_LowAggData <- function() {
       rm( join_msg)
     }
   
-# E2. Read base unit data and parameters--------------------------------------------------
+# D. Read base unit data and parameters--------------------------------------------------
 
     # get base unit data into a data frame
     df_base_unit                   <- get( arena.chainSummary$baseUnit )
@@ -149,70 +150,106 @@ arenaAnalytics_LowAggData <- function() {
     arena.analyze$stratification   <- ifelse(( arena.chainSummary$samplingStrategy == 3 | arena.chainSummary$samplingStrategy == 4  | arena.chainSummary$samplingStrategy == 5 ) & arena.chainSummary$stratumAttribute != "", TRUE, FALSE)
     arena.analyze$strat_attribute  <- ifelse( arena.analyze$stratification, arena.chainSummary$stratumAttribute, "")
     
-    # F. Two-phase sampling: read phase-1 data. Add 'in_Phase2' and base unit data into the 1st phase table   -------------------
-    # in_Phase2: Boolean variable, TRUE for field plots 
-    # For joining, needed a new 'ID_' into both tables for joining the tables
+    # E. Two-phase sampling: read phase-1 data. Add 'in_Phase2' + join Base Unit data -------------------
+    # 'in_Phase2': TRUE for Phase-2 samples, FALSE for Phase-1 
+    # For joining, column 'ID_' added into both tables for joining the tables
     if ( arena.chainSummary$samplingStrategy == 5 ) {
-      # read 1st phase data  ----------------------------------
-        # Get phase 1 data
-        data_phase1 <- categories[[ arena.chainSummary$phase1Category ]]  %>% select(-uuid)
-        if ( is.null( data_phase1)) {
-          Results_out <- "Two-phase sampling -- failed! Missing Phase-1 category table!"
-          return( Results_out )
-        } 
-
-      if ( is.null(arena.chainSummary$commonAttribute) ) arena.chainSummary$commonAttribute == ""
+      # read 1st phase data category table ----------------------------------
+      # Get Phase-1 and Phase-2 data frames
+      data_phase1       <- categories[[ arena.chainSummary$phase1Category ]]  %>% select(-uuid)
+      if ( is.null( data_phase1)) {
+        Results_out <- "Two-phase sampling -- failed! Missing Phase-1 category table!"
+        return( Results_out )
+      } 
       
-      if (arena.chainSummary$commonAttribute != "") {         # any category table joined here
-        data_phase1$ID_ <- as.character( data_phase1[[arena.chainSummary$commonAttribute]])
-      } else if ('code_joint' %in% names(data_phase1)) {      # Sampling Point Data case
-        data_phase1$ID_ <- as.character( data_phase1$code_joint)
-      } else if (!('level_1_code' %in% names(data_phase1)) & 'code' %in% names(data_phase1)) {   # Sampling Point Data case
-        data_phase1$ID_ = as.character( data_phase1$code)     # Sampling Point Data case
-      } else {
-        data_phase1$ID_ = as.character( data_phase1[,1])      # Sampling Point Data case, 1st column expected to be the joining attribute
+      # check that all information is given for joining Phase-1 and Phase-2 tables
+      if ( is.null( arena.chainSummary$phase2JoinEntity)) {
+        Results_out <- "Two-phase sampling -- failed! Missing Phase-2 join entity!"
+        return( Results_out )
       }
-    
-      # take out cluster rows from sampling_point_data
-      if (cluster_UUID_ != "" & arena.chainSummary$commonAttribute == "") data_phase1 <- data_phase1 %>% filter( level == max(level))
+      if ( arena.chainSummary$phase2AsSamplingPointData == FALSE) {
+        if (arena.chainSummary$phase1JoinAttribute == "" | arena.chainSummary$phase2JoinAttribute == "") {
+          Results_out <- "Two-phase sampling -- failed! Missing Phase-1 or Phase-2 join attribute!"
+          return( Results_out )
+        }
+      } 
       
-      data_phase1_names <- data_phase1 %>% select(-ID_) %>%  names() 
+      data_phase1_names <- data_phase1 %>% names() 
       
-      df_base_unit$ID_  <- as.character( df_base_unit[[ arena.chainSummary$baseUnitEntityKeys[ length(arena.chainSummary$baseUnitEntityKeys)]]])
+      data_phase2 <- get( arena.chainSummary$phase2JoinEntity) %>% 
+        select( -any_of (ends_with("_uuid")), -any_of(ends_with("_label")), -any_of(ends_with("_srs")), -any_of(ends_with("_scientific_name"))) %>%
+        select( any_of( arena.analyze$strat_attribute), any_of('weight'), where( ~is.character(.)) | where( ~is.logical(.))) %>%
+        select( any_of( arena.analyze$strat_attribute), any_of(arena.chainSummary$phase2JoinAttribute), -any_of(data_phase1_names), everything())
       
-      # get all base unit attribute names (character & Boolean) for 1 phase table
-      base_unit_columns_to_join <-  df_base_unit %>% 
-        select( -record_uuid, -record_owner_uuid, -any_of(arena.chainSummary$commonAttribute), -any_of(ends_with("_label")), -any_of(ends_with("_srs")), -any_of(ends_with("_scientific_name"))) %>%
-        select(any_of( arena.analyze$strat_attribute), where( ~is.character(.)) | where( ~is.logical(.))) %>%
-        select(-any_of(data_phase1_names)) %>%
-        names()
+      data_phase2$in_Phase2 <- TRUE
+      # only samples with weight >0 are taken to the 2nd phase samples
+      if ( !is.null(data_phase2$weight))  data_phase2 <- data_phase2 %>% mutate( in_Phase2 = if_else( weight > 0, TRUE, FALSE)) 
       
-      # drop out base unit names that are not submitted into arenalytics
-      base_unit_columns_to_join <- arena.schemaSummary  %>% 
+      data_phase2_names <- names( data_phase2)
+      
+      if ( !arena.chainSummary$phase2AsSamplingPointData) { # no Sampling Point Data join
+        data_phase1$ID_ <- as.character( data_phase1[[arena.chainSummary$phase1JoinAttribute]])
+        data_phase2$ID_ <- as.character( data_phase2[[arena.chainSummary$phase2JoinAttribute]])
+      } 
+      
+      if ( arena.chainSummary$phase2AsSamplingPointData) {  # Sampling Point Data join
+        arena.schemaSummary$key = as.logical( arena.schemaSummary$key)
+        
+        # get level of Phase-2 category to be joined
+        joinLevel <- arena.schemaSummary %>% 
+          filter(parentEntity == arena.chainSummary$phase2JoinEntity & key == TRUE) %>%
+          pull(categoryLevel)
+        
+        keyParent <- arena.schemaSummary$parentCode[ arena.schemaSummary$parentEntity == arena.chainSummary$phase2JoinEntity & arena.schemaSummary$key == TRUE] 
+        keyEntity <- arena.schemaSummary$name[       arena.schemaSummary$parentEntity == arena.chainSummary$phase2JoinEntity & arena.schemaSummary$key == TRUE] 
+        
+        keyEntities <- if (length(keyParent) > 1) {
+          c( keyParent, keyEntity)
+        } else {
+          keyEntity
+        }
+        rm(keyParent); rm(keyEntity)
+        
+        # select the correct level data from Sampling Point Data table
+        data_phase1 <- data_phase1 %>% 
+          filter(level == joinLevel)
+        
+        if (joinLevel > 1) {
+          data_phase1 <- data_phase1 %>% mutate(ID_ = as.character(code_joint))
+        } else {
+          data_phase1 <- data_phase1 %>% mutate(ID_ = as.character(code))
+        }
+        
+        data_phase2 <- data_phase2 %>%
+          unite("ID_", all_of(keyEntities), sep = "*", remove = FALSE)
+      }  # Sampling Point Data join
+      
+      
+      # Phase-2: drop out base unit names that are not submitted into arenalytics
+      columns_to_join <- arena.schemaSummary  %>% 
         select( name, hiddenInAnalyticalDashboard)      %>% 
         mutate( hiddenInAnalyticalDashboard = as.logical(hiddenInAnalyticalDashboard)) %>%
-        filter( name %in% base_unit_columns_to_join)    %>%
+        filter( name %in% data_phase2_names)            %>%
+        filter(!name %in% data_phase1_names)            %>%
         filter( !hiddenInAnalyticalDashboard )          %>%
         select( name) %>%
         pull()
       
-      base_unit_columns_to_join <- c('ID_', base_unit_columns_to_join)
+      columns_to_join <- c('ID_', 'in_Phase2', columns_to_join)
       
-      data_phase1 <- data_phase1              %>% 
-        left_join(df_base_unit                %>%
-                    mutate( in_Phase2 = TRUE) %>%
-                    select( ID_, in_Phase2, any_of(base_unit_columns_to_join), any_of(cluster_UUID_), any_of(base_UUID_)),  
-      by = "ID_" ) %>%
-        mutate(across(any_of(base_unit_columns_to_join), ~ replace(., is.na(.), "")))
-
+      data_phase1 <- data_phase1              %>%
+        left_join( data_phase2                %>%
+                     select( any_of(columns_to_join)),
+                   by = "ID_" ) %>%
+        mutate(across(any_of(columns_to_join), ~ replace(., is.na(.), "")))
+      
+      data_phase1$in_Phase2 <- as.logical(data_phase1$in_Phase2)
       data_phase1$in_Phase2[ is.na(data_phase1$in_Phase2)] <- FALSE 
       
-      
-      rm( data_phase1_names)
-      rm( base_unit_columns_to_join)
+      rm( data_phase1_names); rm( data_phase2_names)
     } # 2-phase sampling
     
-    # G1. Read AOIs (areas of strata) -----------------------------------------
+    # F. Read AOIs (areas of strata) -----------------------------------------
 
     aoi_df     <- NULL
     
@@ -221,7 +258,7 @@ arenaAnalytics_LowAggData <- function() {
         mutate(code = as.character(code), code_joint = as.character(code_joint) )
       
 
-      # G2. Read PSU and SSU numbers --------------------------------------------
+      # G1. Read PSU and SSU numbers --------------------------------------------
       # PSU = primary sampling unit, SSU = secondary sampling unit
       if ( arena.chainSummary$nonResponseBiasCorrection ) {
         if (  'design_psu' %in% names( aoi_df) & !'design_ssu' %in% names( aoi_df)) aoi_df$design_ssu <- 0
@@ -239,7 +276,7 @@ arenaAnalytics_LowAggData <- function() {
         aoi_df$design_ssu <- 0
       }
       
-      # G3. read AOI data from the correct level --------------------------------
+      # G2. Read AOI data from the correct level --------------------------------
       # if hierarchical table
       if (('level_1_code' %in% names( aoi_df )) & ('area_cumulative' %in% names( aoi_df ))) {
         
@@ -765,7 +802,7 @@ arenaAnalytics_LowAggData <- function() {
       if ( exists( 'taxonomies'))  saveRDS( taxonomies, "./user_output/MAU/taxonomies.rds")
 
       files_to_zip  <- list.files("./user_output/MAU", full.names = TRUE)
-      f_name        <- paste0('./user_output/MAU_Shiny_(', arena.chainSummary$surveyName, '--', Sys.Date(), ').zip')
+      f_name        <- paste0('./user_output/MAU_Shiny_(', arena.chainSummary$surveyName, ')_', "cycle_", arena.chainSummary$selectedCycle, '--', Sys.Date(), '.zip')
       zip::zipr( f_name, files_to_zip, mode = "cherry-pick")
       rm(files_to_zip); rm(f_name)
     }   

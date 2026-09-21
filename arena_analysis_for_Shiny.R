@@ -203,10 +203,10 @@ arenaAnalytics_LowAggData <- function() {
         keyParent <- arena.schemaSummary$parentCode[ arena.schemaSummary$parentEntity == arena.chainSummary$phase2JoinEntity & arena.schemaSummary$key == TRUE] 
         keyEntity <- arena.schemaSummary$name[       arena.schemaSummary$parentEntity == arena.chainSummary$phase2JoinEntity & arena.schemaSummary$key == TRUE] 
         
-        keyEntities <- if (length(keyParent) > 1 | nchar(keyParent) > 0) {
-          c( keyParent, keyEntity)
+        if (length(keyParent) > 1 | nchar(keyParent) > 0) {
+          keyEntities <- c( keyParent, keyEntity)
         } else {
-          keyEntity
+          keyEntities <- keyEntity
         }
         rm(keyParent); rm(keyEntity)
         

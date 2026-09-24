@@ -200,15 +200,29 @@ arenaAnalytics_LowAggData <- function() {
           filter(parentEntity == arena.chainSummary$phase2JoinEntity & key == TRUE) %>%
           pull(categoryLevel)
         
-        keyParent <- arena.schemaSummary$parentCode[ arena.schemaSummary$parentEntity == arena.chainSummary$phase2JoinEntity & arena.schemaSummary$key == TRUE] 
-        keyEntity <- arena.schemaSummary$name[       arena.schemaSummary$parentEntity == arena.chainSummary$phase2JoinEntity & arena.schemaSummary$key == TRUE] 
+        linkAttributeAtBaseunit <- arena.schemaSummary$name[ arena.schemaSummary$parentEntity == arena.chainSummary$phase2JoinEntity & arena.schemaSummary$key == TRUE] 
         
-        if (length(keyParent) > 1 | nchar(keyParent) > 0) {
-          keyEntities <- c( keyParent, keyEntity)
-        } else {
-          keyEntities <- keyEntity
+        listParents <- list()
+        iCount      <- 1
+        listParents[iCount] <- arena.schemaSummary$parentCode[ arena.schemaSummary$parentEntity == arena.chainSummary$phase2JoinEntity & arena.schemaSummary$key == TRUE] 
+        
+        # does 'keyParent' come from a hierarchical table, where it is at level 2 or below?
+        repeat {
+          listParents[iCount+1] <- arena.schemaSummary$parentCode[ arena.schemaSummary$name == listParents[iCount]]
+          if (listParents[iCount+1] == "" ) {
+            listParents <- unlist( listParents) # convert to vector
+            listParents <- rev(listParents[-length(listParents)]) # remove the last one, and reverse the order
+            break 
+          }
+          iCount = iCount + 1
         }
-        rm(keyParent); rm(keyEntity)
+        
+        if ( length(listParents) > 1 ) {
+          linkAttributes <- c( listParents, linkAttributeAtBaseunit)
+        } else {
+          linkAttributes <- linkAttributeAtBaseunit
+        }
+        rm(listParents); rm(linkAttributeAtBaseunit); rm(iCount)
         
         # select the correct level data from Sampling Point Data table
         data_phase1 <- data_phase1 %>% 
@@ -221,7 +235,7 @@ arenaAnalytics_LowAggData <- function() {
         }
         
         data_phase2 <- data_phase2 %>%
-          unite("ID_", all_of(keyEntities), sep = "*", remove = FALSE)
+          unite("ID_", all_of( linkAttributes), sep = "*", remove = FALSE)
       }  # Sampling Point Data join
       
       
